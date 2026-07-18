@@ -1,6 +1,10 @@
 package onnxface
 
-import "github.com/leandroveronezi/go-onnxface/face"
+import (
+	"image"
+
+	"github.com/leandroveronezi/go-onnxface/face"
+)
 
 /*
 Face, FaceDetector, FaceRecognizer, DistanceType and Match are re-exported
@@ -24,4 +28,10 @@ const (
 // face.Match.
 func Match(feature1, feature2 []float32, dist DistanceType) float64 {
 	return face.Match(feature1, feature2, dist)
+}
+
+// AlignCrop warps img to the standard 112x112 face crop most recognizers
+// (sface, arcface) expect. See face.AlignCrop.
+func AlignCrop(img image.Image, landmarks [5]image.Point) *image.RGBA {
+	return face.AlignCrop(img, landmarks)
 }

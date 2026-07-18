@@ -73,7 +73,7 @@ func featureFor(t *testing.T, det *yunet.Detector, rec *Recognizer, imgPath stri
 		t.Fatalf("Detect(%s): got %d faces, want 1", imgPath, len(faces))
 	}
 
-	aligned := AlignCrop(img, faces[0].Landmarks)
+	aligned := face.AlignCrop(img, faces[0].Landmarks)
 
 	feat, err := rec.Feature(aligned)
 	if err != nil {
