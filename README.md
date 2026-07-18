@@ -15,10 +15,16 @@ under real-world conditions (pose, lighting) using modern, commercially-licensed
 Unlike dlib, ONNX Runtime doesn't need to be compiled from source: Microsoft publishes
 prebuilt shared libraries per platform, so setup is a download instead of a build.
 
+**Design**: the root package holds the shared contract (`Face`, the `FaceDetector`/
+`FaceRecognizer` interfaces, `Match`) plus ONNX Runtime environment setup; each model
+lives in its own subpackage (`yunet`, `sface`) implementing that contract. Adding a
+future engine -- e.g. an ArcFace-family recognizer, should a commercially-usable
+license become available -- means adding a new subpackage, not changing existing code.
+
 **Status**: early development.
-- ✅ Detection (`Detector`, YuNet) -- validated against a real `cv2.FaceDetectorYN`
+- ✅ Detection (`yunet.Detector`) -- validated against a real `cv2.FaceDetectorYN`
   run (box/landmarks/score match within ~1px/0.0005).
-- ✅ Recognition (`Recognizer`, SFace) -- `AlignCrop`/`Feature`/`Match` validated
+- ✅ Recognition (`sface.Recognizer`) -- `AlignCrop`/`Feature`/`Match` validated
   against a real `cv2.FaceRecognizerSF` run (same-person cosine ~1.0,
   different-person cosine ~0.11-0.12 on both implementations, well below
   SFace's ~0.363 same-person threshold).
@@ -27,20 +33,26 @@ prebuilt shared libraries per platform, so setup is a download instead of a buil
 ## Usage
 
 ```go
+import (
+    "github.com/leandroveronezi/go-onnxface"
+    "github.com/leandroveronezi/go-onnxface/sface"
+    "github.com/leandroveronezi/go-onnxface/yunet"
+)
+
 onnxface.Init("/path/to/libonnxruntime.so")
 defer onnxface.Close()
 
-det, _ := onnxface.NewDetector("models/face_detection_yunet_2023mar.onnx")
+det, _ := yunet.NewDetector("models/face_detection_yunet_2023mar.onnx")
 defer det.Close()
 
-rec, _ := onnxface.NewRecognizer("models/face_recognition_sface_2021dec.onnx")
+rec, _ := sface.NewRecognizer("models/face_recognition_sface_2021dec.onnx")
 defer rec.Close()
 
 faces, _ := det.Detect(img) // img is a standard image.Image
 for _, f := range faces {
     fmt.Println(f.Rectangle, f.Landmarks, f.Score)
 
-    aligned := onnxface.AlignCrop(img, f.Landmarks)
+    aligned := sface.AlignCrop(img, f.Landmarks)
     feature, _ := rec.Feature(aligned)
     _ = feature // 128-d embedding; compare with onnxface.Match
 }

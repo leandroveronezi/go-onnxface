@@ -1,4 +1,7 @@
-package onnxface
+// Package sface implements face recognition using SFace
+// (face_recognition_sface_2021dec.onnx from the OpenCV Zoo, Apache-2.0
+// licensed). Recognizer implements the onnxface.FaceRecognizer contract.
+package sface
 
 import (
 	"fmt"
@@ -6,8 +9,11 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/leandroveronezi/go-onnxface"
 	ort "github.com/yalue/onnxruntime_go"
 )
+
+var _ onnxface.FaceRecognizer = (*Recognizer)(nil)
 
 // alignedSize is the fixed crop size cv::FaceRecognizerSF::alignCrop warps
 // faces to before feeding them to the SFace network.
@@ -148,65 +154,6 @@ func (r *Recognizer) Feature(aligned image.Image) ([]float32, error) {
 	feature := make([]float32, len(out))
 	copy(feature, out)
 	return feature, nil
-
-}
-
-// DistanceType selects the metric Match uses to compare two features.
-type DistanceType int
-
-const (
-	// DistanceCosine is cosine similarity: 1 for identical direction, 0
-	// for orthogonal, higher means more similar.
-	DistanceCosine DistanceType = iota
-	// DistanceL2 is Euclidean distance between L2-normalized features:
-	// 0 for identical direction, lower means more similar.
-	DistanceL2
-)
-
-/*
-Match compares two SFace embeddings (as returned by Feature), matching
-cv::FaceRecognizerSF::match: both features are L2-normalized, then compared
-by cosine similarity or L2 distance.
-*/
-func Match(feature1, feature2 []float32, dist DistanceType) float64 {
-
-	n1 := normalize(feature1)
-	n2 := normalize(feature2)
-
-	switch dist {
-	case DistanceL2:
-		var sum float64
-		for i := range n1 {
-			d := n1[i] - n2[i]
-			sum += d * d
-		}
-		return math.Sqrt(sum)
-	default:
-		var sum float64
-		for i := range n1 {
-			sum += n1[i] * n2[i]
-		}
-		return sum
-	}
-
-}
-
-func normalize(f []float32) []float64 {
-
-	out := make([]float64, len(f))
-	var sumSq float64
-	for i, v := range f {
-		out[i] = float64(v)
-		sumSq += out[i] * out[i]
-	}
-	norm := math.Sqrt(sumSq)
-	if norm == 0 {
-		return out
-	}
-	for i := range out {
-		out[i] /= norm
-	}
-	return out
 
 }
 

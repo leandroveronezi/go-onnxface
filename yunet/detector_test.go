@@ -1,4 +1,4 @@
-package onnxface
+package yunet_test
 
 import (
 	"image"
@@ -6,9 +6,28 @@ import (
 	"math"
 	"os"
 	"testing"
+
+	"github.com/leandroveronezi/go-onnxface"
+	"github.com/leandroveronezi/go-onnxface/yunet"
 )
 
-const yunetModelPath = "models/face_detection_yunet_2023mar.onnx"
+const yunetModelPath = "../models/face_detection_yunet_2023mar.onnx"
+
+// ortSharedLibraryPath reads the onnxruntime shared library path from the
+// ONNXFACE_ORT_LIB environment variable, skipping the test if it's unset
+// (the library is a large platform-specific binary, not checked in).
+func ortSharedLibraryPath(t *testing.T) string {
+	t.Helper()
+
+	path := os.Getenv("ONNXFACE_ORT_LIB")
+	if path == "" {
+		t.Skip("ONNXFACE_ORT_LIB not set, skipping test that needs the onnxruntime shared library")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("ONNXFACE_ORT_LIB=%s: %v", path, err)
+	}
+	return path
+}
 
 // initForTest initializes the ONNX Runtime environment and registers a
 // cleanup to tear it down, so each test that needs it can call this
@@ -19,10 +38,10 @@ func initForTest(t *testing.T) {
 
 	path := ortSharedLibraryPath(t)
 
-	if err := Init(path); err != nil {
+	if err := onnxface.Init(path); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	t.Cleanup(func() { Close() })
+	t.Cleanup(func() { onnxface.Close() })
 }
 
 func loadTestImage(t *testing.T, path string) image.Image {
@@ -54,13 +73,13 @@ func loadTestImage(t *testing.T, path string) image.Image {
 func TestDetectorFindsFaceMatchingPythonReference(t *testing.T) {
 	initForTest(t)
 
-	det, err := NewDetector(yunetModelPath)
+	det, err := yunet.NewDetector(yunetModelPath)
 	if err != nil {
 		t.Fatalf("NewDetector: %v", err)
 	}
 	defer det.Close()
 
-	img := loadTestImage(t, "testdata/amy.jpg")
+	img := loadTestImage(t, "../testdata/amy.jpg")
 
 	faces, err := det.Detect(img)
 	if err != nil {
