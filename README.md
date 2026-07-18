@@ -7,19 +7,32 @@
 Face detection and recognition for Go, backed by [ONNX Runtime](https://onnxruntime.ai)
 instead of dlib. Sibling project to [go-face](https://github.com/leandroveronezi/go-face)/
 [go-recognizer](https://github.com/leandroveronezi/go-recognizer), aimed at better accuracy
-under real-world conditions (pose, lighting) using modern, commercially-licensed models:
-
-- **Detection**: [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) (MIT)
-- **Recognition**: [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) (Apache-2.0)
+under real-world conditions (pose, lighting) than dlib's 2017-era model, using multiple
+interchangeable engines -- each a subpackage implementing a shared contract (`face.FaceDetector`
+or `face.FaceRecognizer`), so adding one doesn't change how the others are used.
 
 Unlike dlib, ONNX Runtime doesn't need to be compiled from source: Microsoft publishes
 prebuilt shared libraries per platform. `Recognizer.DownloadModels` fetches the right
 one for your OS/arch automatically, the same way go-recognizer's `DownloadModels`
 fetches dlib's model files -- no manual ".so path" step.
 
+### Engines
+
+Every model here was picked for having an explicit, commercially-usable license on the
+*published weights* -- not just permissive code wrapping weights trained on a
+research-only dataset (MS1M/CASIA-WebFace/VGGFace2 and similar), which is the trap
+most "MIT-licensed" face recognition repos fall into. See each row's link for how it
+was verified.
+
+| Kind | Package | Model | License | Notes |
+|------|---------|-------|---------|-------|
+| Detection | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | Default. Fixed 640x640 input (letterboxed). |
+| Detection | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | Dynamic input size (resized to a multiple of 32, no letterbox distortion). |
+| Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
+
 **Status**: early development.
-- ✅ Detection (`yunet.Detector`) -- validated against a real `cv2.FaceDetectorYN`
-  run (box/landmarks/score match within ~1px/0.0005).
+- ✅ Detection (`yunet.Detector`, `centerface.Detector`) -- each validated against
+  its own real Python/OpenCV reference run (box/landmarks/score match within ~1-2px).
 - ✅ Recognition (`sface.Recognizer`) -- `Align`/`Feature` validated against a
   real `cv2.FaceRecognizerSF` run (same-person cosine ~1.0, different-person
   cosine ~0.11-0.12 on both implementations, well below SFace's ~0.363
@@ -27,6 +40,20 @@ fetches dlib's model files -- no manual ".so path" step.
 - ✅ Easy API (`Recognizer`, file-path driven, auto-downloading) and low-level
   API (`Engine`, `Compare`, working with `image.Image`) -- see Usage below.
 - ⏳ Liveness/anti-spoof support -- planned for later.
+
+### Licensing: why so few recognition models
+
+Face *detection* models (YuNet, CenterFace, RetinaFace, MTCNN, ...) train on WIDER
+FACE -- bounding boxes only, no identity labels -- so licensing them commercially is
+usually uneventful. Face *recognition* models need identity-labeled data, and nearly
+every well-known one (ArcFace, GhostFaceNets, FaceNet, VGG-Face, Buffalo_L, ...) is
+trained on MS1M/CASIA-WebFace/VGGFace2-lineage datasets released "for research
+purposes only" -- that restriction carries over to the weights regardless of the
+*code's* license (MIT code around non-commercial weights is still non-commercial to
+actually use). SFace is the one exception found so far: OpenCV Zoo distributes its
+specific weights under an explicit Apache-2.0 grant. If you need higher recognition
+accuracy than SFace and can accept a paid license, the InsightFace/ArcFace family
+(`buffalo_l` and similar) is the usual next step -- see their commercial licensing page.
 
 ## Usage
 
@@ -56,24 +83,27 @@ if err != nil {
 fmt.Println(result.Id, result.Distance, result.Confidence)
 ```
 
-`Recognizer.Tolerance` defaults to 1.128 (OpenCV's suggested SFace L2 threshold)
-after `Init`; tune it for your own deployment, same idea as go-face/go-recognizer's
-`Tolerance`. `SaveDataset`/`LoadDataset` persist `Dataset` to/from a JSON file.
+`Recognizer` always uses `yunet`+`sface` internally (`DownloadModels`/`Init`'s
+defaults). `Recognizer.Tolerance` defaults to 1.128 (OpenCV's suggested SFace L2
+threshold) after `Init`; tune it for your own deployment, same idea as
+go-face/go-recognizer's `Tolerance`. `SaveDataset`/`LoadDataset` persist `Dataset`
+to/from a JSON file.
 
 Lower-level control -- work with `image.Image` directly, pick your own
-detector/recognizer, or run detection/recognition as separate steps:
+detector/recognizer (e.g. `centerface` instead of `yunet`), or run detection/
+recognition as separate steps:
 
 ```go
 import (
     "github.com/leandroveronezi/go-onnxface"
+    "github.com/leandroveronezi/go-onnxface/centerface"
     "github.com/leandroveronezi/go-onnxface/sface"
-    "github.com/leandroveronezi/go-onnxface/yunet"
 )
 
 onnxface.InitEnvironment("/path/to/libonnxruntime.so")
 defer onnxface.CloseEnvironment()
 
-det, _ := yunet.NewDetector("models/face_detection_yunet_2023mar.onnx")
+det, _ := centerface.NewDetector("models/centerface.onnx")
 rec, _ := sface.NewRecognizer("models/face_recognition_sface_2021dec.onnx")
 
 engine := onnxface.NewEngine(det, rec)
@@ -88,10 +118,10 @@ result := onnxface.Compare(results[0].Feature, knownFeature, 1.128)
 fmt.Println(result.IsMatch, result.Distance, result.Confidence)
 ```
 
-`yunet`/`sface` implement the shared `onnxface.FaceDetector`/`FaceRecognizer`
-contract (in the `face` subpackage) -- a future engine, e.g. an ArcFace-family
-recognizer should a commercially-usable license become available, is a new
-subpackage implementing that contract, not a change to existing code.
+`yunet`/`centerface`/`sface` implement the shared `onnxface.FaceDetector`/
+`FaceRecognizer` contract (in the `face` subpackage) -- a future engine is a new
+subpackage implementing that contract, not a change to existing code. See
+`examples/` for complete, runnable programs.
 
 ## Requirements
 
