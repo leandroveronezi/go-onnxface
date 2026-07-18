@@ -1,0 +1,22 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+/.idea/
+/.history/
+/go.sum
+
+# onnxruntime shared library and models -- large platform-specific
+# binaries, not checked in. See README for how to obtain them.
+/onnxruntime/
+/models/
