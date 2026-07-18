@@ -16,7 +16,6 @@
 /.history/
 /go.sum
 
-# onnxruntime shared library and models -- large platform-specific
-# binaries, not checked in. See README for how to obtain them.
+# onnxruntime shared library -- large platform-specific binary, not
+# checked in. See README for how to obtain it.
 /onnxruntime/
-/models/

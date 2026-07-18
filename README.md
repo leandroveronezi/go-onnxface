@@ -15,8 +15,26 @@ under real-world conditions (pose, lighting) using modern, commercially-licensed
 Unlike dlib, ONNX Runtime doesn't need to be compiled from source: Microsoft publishes
 prebuilt shared libraries per platform, so setup is a download instead of a build.
 
-**Status**: early development. Detection and recognition are being built out; a
-higher-level API and liveness/anti-spoof support are planned for later.
+**Status**: early development.
+- ✅ Detection (`Detector`, YuNet) -- validated against a real `cv2.FaceDetectorYN`
+  run (box/landmarks/score match within ~1px/0.0005).
+- ⏳ Recognition (SFace) -- not started.
+- ⏳ Higher-level API and liveness/anti-spoof support -- planned for later.
+
+## Usage
+
+```go
+onnxface.Init("/path/to/libonnxruntime.so")
+defer onnxface.Close()
+
+det, _ := onnxface.NewDetector("models/face_detection_yunet_2023mar.onnx")
+defer det.Close()
+
+faces, _ := det.Detect(img) // img is a standard image.Image
+for _, f := range faces {
+    fmt.Println(f.Rectangle, f.Landmarks, f.Score)
+}
+```
 
 ## Requirements
 
