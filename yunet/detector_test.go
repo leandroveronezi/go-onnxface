@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/leandroveronezi/go-onnxface"
+	"github.com/leandroveronezi/go-onnxface/face"
 	"github.com/leandroveronezi/go-onnxface/yunet"
 )
 
@@ -38,10 +38,10 @@ func initForTest(t *testing.T) {
 
 	path := ortSharedLibraryPath(t)
 
-	if err := onnxface.Init(path); err != nil {
-		t.Fatalf("Init: %v", err)
+	if err := face.InitEnvironment(path); err != nil {
+		t.Fatalf("InitEnvironment: %v", err)
 	}
-	t.Cleanup(func() { onnxface.Close() })
+	t.Cleanup(func() { face.CloseEnvironment() })
 }
 
 func loadTestImage(t *testing.T, path string) image.Image {

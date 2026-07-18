@@ -27,10 +27,10 @@ func ortSharedLibraryPath(t *testing.T) string {
 func TestInitClose(t *testing.T) {
 	path := ortSharedLibraryPath(t)
 
-	if err := Init(path); err != nil {
-		t.Fatalf("Init: %v", err)
+	if err := InitEnvironment(path); err != nil {
+		t.Fatalf("InitEnvironment: %v", err)
 	}
-	defer Close()
+	defer CloseEnvironment()
 
 	v := Version()
 	if v == "" {

@@ -30,15 +30,23 @@ func ortSharedLibraryPath(t *testing.T) string {
 	return path
 }
 
+// initForTest initializes the ONNX Runtime environment and registers a
+// cleanup to tear it down. It's idempotent within a single test: calling
+// it more than once (e.g. once per Recognizer under test) is safe, since
+// only the call that actually initializes registers a matching cleanup.
 func initForTest(t *testing.T) {
 	t.Helper()
 
+	if onnxface.IsInitialized() {
+		return
+	}
+
 	path := ortSharedLibraryPath(t)
 
-	if err := onnxface.Init(path); err != nil {
-		t.Fatalf("Init: %v", err)
+	if err := onnxface.InitEnvironment(path); err != nil {
+		t.Fatalf("InitEnvironment: %v", err)
 	}
-	t.Cleanup(func() { onnxface.Close() })
+	t.Cleanup(func() { onnxface.CloseEnvironment() })
 }
 
 func loadTestImage(t *testing.T, path string) image.Image {

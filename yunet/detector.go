@@ -1,6 +1,6 @@
 // Package yunet implements face detection using YuNet
 // (face_detection_yunet_2023mar.onnx from the OpenCV Zoo, MIT licensed).
-// Detector implements the onnxface.FaceDetector contract.
+// Detector implements the face.FaceDetector contract.
 package yunet
 
 import (
@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/image/draw"
 
-	"github.com/leandroveronezi/go-onnxface"
+	"github.com/leandroveronezi/go-onnxface/face"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
@@ -23,7 +23,7 @@ const yunetSize = 640
 
 var yunetStrides = [3]int{8, 16, 32}
 
-var _ onnxface.FaceDetector = (*Detector)(nil)
+var _ face.FaceDetector = (*Detector)(nil)
 
 // Detector runs YuNet face detection.
 type Detector struct {
@@ -41,7 +41,7 @@ type Detector struct {
 
 /*
 NewDetector loads the YuNet face detection model from modelPath (e.g.
-face_detection_yunet_2023mar.onnx from the OpenCV Zoo). Init must have
+face_detection_yunet_2023mar.onnx from the OpenCV Zoo). InitEnvironment must have
 been called first.
 */
 func NewDetector(modelPath string) (*Detector, error) {
@@ -150,7 +150,7 @@ func (d *Detector) Close() {
 Detect finds faces in img, returning their rectangles/landmarks in img's
 own coordinate space (not the model's internal 640x640 space).
 */
-func (d *Detector) Detect(img image.Image) ([]onnxface.Face, error) {
+func (d *Detector) Detect(img image.Image) ([]face.Face, error) {
 
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
@@ -196,7 +196,7 @@ func (d *Detector) Detect(img image.Image) ([]onnxface.Face, error) {
 		return nil, fmt.Errorf("running session: %w", err)
 	}
 
-	var candidates []onnxface.Face
+	var candidates []face.Face
 	for i, stride := range yunetStrides {
 		grid := yunetSize / stride
 		cls := d.cls[i].GetData()
@@ -229,7 +229,7 @@ func (d *Detector) Detect(img image.Image) ([]onnxface.Face, error) {
 					landmarks[n] = image.Point{X: int(math.Round(lx / scale)), Y: int(math.Round(ly / scale))}
 				}
 
-				candidates = append(candidates, onnxface.Face{
+				candidates = append(candidates, face.Face{
 					Rectangle: image.Rect(
 						int(math.Round(x1/scale)),
 						int(math.Round(y1/scale)),
@@ -260,11 +260,11 @@ func clamp01(v float32) float32 {
 // nms performs greedy non-maximum suppression, matching OpenCV's
 // dnn::NMSBoxes semantics (sort by score descending, suppress boxes with
 // IoU above threshold against any higher-scoring kept box).
-func nms(faces []onnxface.Face, iouThreshold float32, topK int) []onnxface.Face {
+func nms(faces []face.Face, iouThreshold float32, topK int) []face.Face {
 
 	sort.Slice(faces, func(i, j int) bool { return faces[i].Score > faces[j].Score })
 
-	kept := make([]onnxface.Face, 0, len(faces))
+	kept := make([]face.Face, 0, len(faces))
 	for _, f := range faces {
 		if len(kept) >= topK {
 			break

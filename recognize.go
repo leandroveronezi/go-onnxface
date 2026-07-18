@@ -93,18 +93,32 @@ func Compare(feature1, feature2 []float32, tolerance float64) CompareResult {
 
 	d := Match(feature1, feature2, DistanceL2)
 
-	confidence := 1 - d/tolerance
-	if confidence < 0 {
-		confidence = 0
-	}
-	if confidence > 1 {
-		confidence = 1
-	}
-
 	return CompareResult{
 		IsMatch:    d <= tolerance,
 		Distance:   d,
-		Confidence: confidence,
+		Confidence: confidenceFor(d, tolerance),
 	}
+
+}
+
+// confidenceFor normalizes a distance against the tolerance used to
+// accept it, into a convenience [0,1] score where 0 distance is 1.0 and
+// a distance at (or past) the tolerance cutoff is 0.0. Not a calibrated
+// probability.
+func confidenceFor(distance, tolerance float64) float64 {
+
+	if tolerance <= 0 {
+		return 0
+	}
+
+	c := 1 - distance/tolerance
+	if c < 0 {
+		return 0
+	}
+	if c > 1 {
+		return 1
+	}
+
+	return c
 
 }

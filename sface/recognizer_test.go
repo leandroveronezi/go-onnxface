@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/leandroveronezi/go-onnxface"
+	"github.com/leandroveronezi/go-onnxface/face"
 	"github.com/leandroveronezi/go-onnxface/yunet"
 )
 
@@ -37,10 +37,10 @@ func initForTest(t *testing.T) {
 
 	path := ortSharedLibraryPath(t)
 
-	if err := onnxface.Init(path); err != nil {
-		t.Fatalf("Init: %v", err)
+	if err := face.InitEnvironment(path); err != nil {
+		t.Fatalf("InitEnvironment: %v", err)
 	}
-	t.Cleanup(func() { onnxface.Close() })
+	t.Cleanup(func() { face.CloseEnvironment() })
 }
 
 func loadTestImage(t *testing.T, path string) image.Image {
@@ -114,12 +114,12 @@ func TestRecognizerMatchesPythonReference(t *testing.T) {
 		t.Fatalf("len(amyFeat) = %d, want %d", len(amyFeat), featureSize)
 	}
 
-	cosSame := onnxface.Match(amyFeat, amyFeat, onnxface.DistanceCosine)
+	cosSame := face.Match(amyFeat, amyFeat, face.DistanceCosine)
 	if math.Abs(cosSame-1.0) > 1e-4 {
 		t.Errorf("cosine(amy,amy) = %v, want ~1.0", cosSame)
 	}
 
-	cosDiff := onnxface.Match(amyFeat, bernFeat, onnxface.DistanceCosine)
+	cosDiff := face.Match(amyFeat, bernFeat, face.DistanceCosine)
 	if math.Abs(cosDiff-0.1217) > 0.05 {
 		t.Errorf("cosine(amy,bernadette) = %v, want ~0.1217 (within 0.05)", cosDiff)
 	}
@@ -129,12 +129,12 @@ func TestRecognizerMatchesPythonReference(t *testing.T) {
 		t.Errorf("cosine(amy,bernadette) = %v, expected well below the ~0.363 same-person threshold", cosDiff)
 	}
 
-	l2Same := onnxface.Match(amyFeat, amyFeat, onnxface.DistanceL2)
+	l2Same := face.Match(amyFeat, amyFeat, face.DistanceL2)
 	if l2Same > 1e-4 {
 		t.Errorf("l2(amy,amy) = %v, want ~0.0", l2Same)
 	}
 
-	l2Diff := onnxface.Match(amyFeat, bernFeat, onnxface.DistanceL2)
+	l2Diff := face.Match(amyFeat, bernFeat, face.DistanceL2)
 	if math.Abs(l2Diff-1.325) > 0.1 {
 		t.Errorf("l2(amy,bernadette) = %v, want ~1.325 (within 0.1)", l2Diff)
 	}

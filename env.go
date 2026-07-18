@@ -1,37 +1,49 @@
-// Package onnxface provides face detection and recognition backed by
-// ONNX Runtime, using models with commercially permissive licenses
-// (YuNet for detection, SFace for recognition -- see the README).
+// Package onnxface is the easy, batteries-included face recognition API:
+// DownloadModels + Recognizer work in terms of file paths, with no manual
+// setup (the onnxruntime shared library and the detection/recognition
+// models are located/downloaded automatically). For lower-level control
+// (custom detectors/recognizers, image.Image instead of file paths,
+// choosing your own comparison metric), see Engine, Compare, and the
+// yunet/sface packages -- the same building blocks Recognizer uses
+// internally, backed by ONNX Runtime instead of dlib, with models that
+// have commercially permissive licenses (YuNet for detection, SFace for
+// recognition -- see the README).
 package onnxface
 
-import (
-	ort "github.com/yalue/onnxruntime_go"
-)
+import "github.com/leandroveronezi/go-onnxface/face"
 
 /*
-Init points the package at the onnxruntime shared library and
-initializes the ONNX Runtime environment. Call it once, before using
-anything else in this package.
+InitEnvironment points the package at the onnxruntime shared library and
+initializes the ONNX Runtime environment. It's process-global -- call it
+once, before using anything else in this package or in yunet/sface.
 
-sharedLibraryPath must point at the onnxruntime shared library for your
-platform (libonnxruntime.so on Linux, .dylib on macOS, .dll on
-Windows) -- see the README for how to obtain it. Unlike dlib, this
-library is not compiled from source: it's a prebuilt binary published
-by Microsoft.
+Most callers don't need this directly: Recognizer.Init calls it
+automatically (skipping it if already initialized), using the shared
+library DownloadModels fetched. Call InitEnvironment yourself only when
+working with the lower-level Engine/yunet/sface directly, or to point at
+an onnxruntime install of your own instead of a downloaded one.
 */
-func Init(sharedLibraryPath string) error {
-	ort.SetSharedLibraryPath(sharedLibraryPath)
-	return ort.InitializeEnvironment()
+func InitEnvironment(sharedLibraryPath string) error {
+	return face.InitEnvironment(sharedLibraryPath)
 }
 
 /*
-Close releases the ONNX Runtime environment. Call it once, when you're
-done using the package. Don't use the package after calling Close.
+CloseEnvironment releases the ONNX Runtime environment. Call it once,
+when you're completely done using the package (including any Recognizer
+instances) -- it's process-global, not per-instance.
 */
-func Close() error {
-	return ort.DestroyEnvironment()
+func CloseEnvironment() error {
+	return face.CloseEnvironment()
 }
 
-// Version returns the onnxruntime version string linked at Init time.
+// IsInitialized reports whether InitEnvironment has already set up the
+// ONNX Runtime environment in this process.
+func IsInitialized() bool {
+	return face.IsInitialized()
+}
+
+// Version returns the onnxruntime version string linked at
+// InitEnvironment time.
 func Version() string {
-	return ort.GetVersion()
+	return face.Version()
 }

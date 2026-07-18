@@ -1,6 +1,6 @@
 // Package sface implements face recognition using SFace
 // (face_recognition_sface_2021dec.onnx from the OpenCV Zoo, Apache-2.0
-// licensed). Recognizer implements the onnxface.FaceRecognizer contract.
+// licensed). Recognizer implements the face.FaceRecognizer contract.
 package sface
 
 import (
@@ -9,11 +9,11 @@ import (
 	"image/color"
 	"math"
 
-	"github.com/leandroveronezi/go-onnxface"
+	"github.com/leandroveronezi/go-onnxface/face"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-var _ onnxface.FaceRecognizer = (*Recognizer)(nil)
+var _ face.FaceRecognizer = (*Recognizer)(nil)
 
 // alignedSize is the fixed crop size cv::FaceRecognizerSF::alignCrop warps
 // faces to before feeding them to the SFace network.
@@ -49,7 +49,7 @@ type Recognizer struct {
 
 /*
 NewRecognizer loads the SFace face recognition model from modelPath (e.g.
-face_recognition_sface_2021dec.onnx from the OpenCV Zoo). Init must have
+face_recognition_sface_2021dec.onnx from the OpenCV Zoo). InitEnvironment must have
 been called first.
 */
 func NewRecognizer(modelPath string) (*Recognizer, error) {
@@ -118,7 +118,7 @@ func AlignCrop(img image.Image, landmarks [5]image.Point) *image.RGBA {
 
 }
 
-// Align implements onnxface.FaceRecognizer by calling AlignCrop. It takes
+// Align implements face.FaceRecognizer by calling AlignCrop. It takes
 // a receiver only to satisfy the interface -- alignment is pure geometry
 // and doesn't touch the loaded model.
 func (r *Recognizer) Align(img image.Image, landmarks [5]image.Point) image.Image {
@@ -129,7 +129,7 @@ func (r *Recognizer) Align(img image.Image, landmarks [5]image.Point) image.Imag
 
 /*
 Feature extracts a 128-d embedding from an aligned 112x112 face crop (as
-produced by AlignCrop). Init must have been called first.
+produced by AlignCrop). InitEnvironment must have been called first.
 */
 func (r *Recognizer) Feature(aligned image.Image) ([]float32, error) {
 
