@@ -118,6 +118,15 @@ func AlignCrop(img image.Image, landmarks [5]image.Point) *image.RGBA {
 
 }
 
+// Align implements onnxface.FaceRecognizer by calling AlignCrop. It takes
+// a receiver only to satisfy the interface -- alignment is pure geometry
+// and doesn't touch the loaded model.
+func (r *Recognizer) Align(img image.Image, landmarks [5]image.Point) image.Image {
+
+	return AlignCrop(img, landmarks)
+
+}
+
 /*
 Feature extracts a 128-d embedding from an aligned 112x112 face crop (as
 produced by AlignCrop). Init must have been called first.

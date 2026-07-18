@@ -24,13 +24,19 @@ license become available -- means adding a new subpackage, not changing existing
 **Status**: early development.
 - ✅ Detection (`yunet.Detector`) -- validated against a real `cv2.FaceDetectorYN`
   run (box/landmarks/score match within ~1px/0.0005).
-- ✅ Recognition (`sface.Recognizer`) -- `AlignCrop`/`Feature`/`Match` validated
-  against a real `cv2.FaceRecognizerSF` run (same-person cosine ~1.0,
-  different-person cosine ~0.11-0.12 on both implementations, well below
-  SFace's ~0.363 same-person threshold).
-- ⏳ Higher-level API and liveness/anti-spoof support -- planned for later.
+- ✅ Recognition (`sface.Recognizer`) -- `Align`/`Feature` validated against a
+  real `cv2.FaceRecognizerSF` run (same-person cosine ~1.0, different-person
+  cosine ~0.11-0.12 on both implementations, well below SFace's ~0.363
+  same-person threshold).
+- ✅ Higher-level API (`Engine`, `Compare`) -- ties any `FaceDetector` +
+  `FaceRecognizer` pair together (`Engine.Recognize`) and classifies a pair
+  of embeddings against a caller-chosen tolerance (`Compare`), mirroring
+  go-face/go-recognizer's Tolerance/Distance/Confidence vocabulary.
+- ⏳ Liveness/anti-spoof support -- planned for later.
 
 ## Usage
+
+Low-level (pick your own detector/recognizer, control every step):
 
 ```go
 import (
@@ -52,12 +58,27 @@ faces, _ := det.Detect(img) // img is a standard image.Image
 for _, f := range faces {
     fmt.Println(f.Rectangle, f.Landmarks, f.Score)
 
-    aligned := sface.AlignCrop(img, f.Landmarks)
+    aligned := rec.Align(img, f.Landmarks)
     feature, _ := rec.Feature(aligned)
-    _ = feature // 128-d embedding; compare with onnxface.Match
+    _ = feature // 128-d embedding; compare with onnxface.Match or onnxface.Compare
+}
+```
+
+High-level (`Engine` ties a `FaceDetector` + `FaceRecognizer` together):
+
+```go
+engine := onnxface.NewEngine(det, rec)
+defer engine.Close()
+
+results, _ := engine.Recognize(img) // detects + aligns + embeds every face
+for _, r := range results {
+    fmt.Println(r.Rectangle, r.Score, len(r.Feature))
 }
 
-similarity := onnxface.Match(feature1, feature2, onnxface.DistanceCosine)
+// tolerance is yours to choose (camera quality/lighting-dependent); OpenCV
+// suggests ~1.128 as a starting point for SFace specifically.
+result := onnxface.Compare(results[0].Feature, knownFeature, 1.128)
+fmt.Println(result.IsMatch, result.Distance, result.Confidence)
 ```
 
 ## Requirements
