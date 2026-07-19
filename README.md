@@ -24,15 +24,15 @@ research-only dataset (MS1M/CASIA-WebFace/VGGFace2 and similar), which is the tr
 most "MIT-licensed" face recognition repos fall into. See each row's link for how it
 was verified.
 
-| Kind | Package | Model | License | Notes |
-|------|---------|-------|---------|-------|
-| Detection | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | Default. Fixed 640x640 input (letterboxed). |
-| Detection | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | Dynamic input size (resized to a multiple of 32, no letterbox distortion). |
-| Detection | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | Heaviest of the three (~52MB float16 vs CenterFace's ~7.5MB/YuNet's ~230KB) and, per each project's own self-reported WIDER FACE hard-set numbers (not a unified benchmark, so treat as directional): the most accurate -- RetinaFace resnet50 ~84-90% vs CenterFace ~87% vs YuNet ~75%. Fixed 640x640 input (letterboxed). |
-| Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
-| Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
-| Recognition | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depends on your weights* | Same situation as `arcface` (MS1MV2/MS1MV3-trained) -- a bridge, no bundled/downloaded weights. Modern (2023) and competitive with ArcFace (~99.7% LFW), unlike the other DeepFace-wrapped recognition models (VGG-Face/OpenFace/2014-era "DeepFace"), which are old enough that adding them wouldn't beat what's already here. |
-| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. Takes a rectangle from any detector, not tied to the `face.FaceDetector` contract. |
+| Kind | Package | Model | License | Benchmark (this repo, see below) | Notes |
+|------|---------|-------|---------|-----------------------------------|-------|
+| Detection | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | 70.67% recall (WIDER FACE val) | Default. Fixed 640x640 input (letterboxed). |
+| Detection | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | 78.92% recall (WIDER FACE val) | Dynamic input size (resized to a multiple of 32, no letterbox distortion). |
+| Detection | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | 76.55% recall (WIDER FACE val) | Heaviest of the three (~52MB float16 vs CenterFace's ~7.5MB/YuNet's ~230KB). Fixed 640x640 input (letterboxed). |
+| Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | 97.11% accuracy (CFP-FP) | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
+| Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | 99.51% accuracy (CFP-FP, buffalo_l) | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
+| Recognition | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depends on your weights* | 96.80% accuracy (CFP-FP) | Same situation as `arcface` (MS1MV2/MS1MV3-trained) -- a bridge, no bundled/downloaded weights. Modern (2023) and competitive with ArcFace, unlike the other DeepFace-wrapped recognition models (VGG-Face/OpenFace/2014-era "DeepFace"), which are old enough that adding them wouldn't beat what's already here. |
+| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | -- | Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. Takes a rectangle from any detector, not tied to the `face.FaceDetector` contract. |
 
 **Status**: early development.
 - ✅ Detection (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
@@ -63,6 +63,40 @@ was verified.
   different-person cosine ~0.008, using the exact landmarks the Go side
   itself produced -- confirms the alignment/preprocessing port is correct,
   not just "close enough").
+
+### Benchmarks
+
+Measured against two uncurated, real-world datasets -- chosen specifically because
+they include real pose/lighting/occlusion variation instead of posed studio photos:
+
+- **Detection**: [WIDER FACE](http://shuoyang1213.me/WIDERFACE/) validation set --
+  3,226 images, 19,926 ground-truth faces ≥20px tall. Metric: recall at IoU≥0.5,
+  every difficulty level combined. This is *not* the official WIDER FACE eval-tools
+  protocol (separate easy/medium/hard subsets, PASCAL-VOC-style average precision),
+  so treat the two columns below as directionally comparable, not the same metric.
+- **Recognition**: [CFP-FP](http://www.cfpw.io/) (Celebrities in Frontal-Profile) --
+  7,000 frontal-vs-profile verification pairs across all 10 folds. Metric: accuracy
+  at the single best-achievable threshold, swept post-hoc over every pair -- slightly
+  more optimistic than the standard 10-fold cross-validated-threshold protocol most
+  papers report.
+
+| Package | Measured (this repo, Go) | Published reference (original model/paper) |
+|---------|---------------------------|----------------------------------------------|
+| `yunet` | 70.67% recall | 88.44% / 86.56% / 75.03% easy/medium/hard AP ([opencv_zoo](https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/README.md)) |
+| `centerface` | 78.92% recall | 92.2% / 91.1% / 78.2% easy/medium/hard mAP, single-scale ([upstream](https://github.com/Star-Clouds/CenterFace)) |
+| `retinaface` | 76.55% recall | 96.5% / 95.6% / 90.4% easy/medium/hard mAP ([paper](https://arxiv.org/abs/1905.00641)) |
+| `sface` | 97.11% accuracy | 95.26% ([paper](https://arxiv.org/abs/2205.12010), ResNet50/CASIA-WebFace config -- the shipped weights are a lighter MobileFaceNet, not necessarily identical) |
+| `arcface` (buffalo_l) | 99.51% accuracy | 99.33% ([InsightFace model zoo](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)) |
+| `ghostface` | 96.80% accuracy | 96.83% ([paper](https://www.researchgate.net/publication/369930264_GhostFaceNets_Lightweight_Face_Recognition_Model_from_Cheap_Operations)) |
+
+Pose is consistently the hardest attribute for all three detectors: WIDER FACE's own
+atypical-pose faces drop recall from ~73-81% (typical pose) down to ~38-58%
+(atypical) -- a bigger gap than blur or occlusion produce on their own. RetinaFace is
+the most robust to atypical pose specifically (57.68% vs CenterFace's 53.15% and
+YuNet's 38.37%); CenterFace has the best overall recall and the best occlusion/
+illumination handling. None of the three -- or any face detector -- can find a face
+that isn't visible at all (e.g. someone looking straight down): that's a person/head
+detection problem, not face detection, and out of scope here.
 
 ### Licensing: why so few recognition models
 
