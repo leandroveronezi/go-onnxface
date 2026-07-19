@@ -31,6 +31,7 @@ was verified.
 | Detection | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | Heaviest of the three (~52MB float16 vs CenterFace's ~7.5MB/YuNet's ~230KB) and, per each project's own self-reported WIDER FACE hard-set numbers (not a unified benchmark, so treat as directional): the most accurate -- RetinaFace resnet50 ~84-90% vs CenterFace ~87% vs YuNet ~75%. Fixed 640x640 input (letterboxed). |
 | Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
 | Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
+| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. Takes a rectangle from any detector, not tied to the `face.FaceDetector` contract. |
 
 **Status**: early development.
 - ✅ Detection (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
@@ -50,7 +51,11 @@ was verified.
   against a real InsightFace `buffalo_l` (`w600k_r50.onnx`) run (same-person
   cosine ~1.0, different-person cosine ~-0.03); not part of CI since it needs
   weights this repo can't ship.
-- ⏳ Liveness/anti-spoof support -- planned for later.
+- ✅ Liveness/anti-spoof (`liveness.Detector`) -- the crop/preprocessing/ensemble
+  math ported line-by-line from Silent-Face-Anti-Spoofing's own source (not just
+  its README), validated against a real onnxruntime run of the unmodified
+  original models on `testdata/amy.jpg` (a real photo, correctly scored
+  live, ~0.99).
 
 ### Licensing: why so few recognition models
 
@@ -156,6 +161,22 @@ rec, _ := arcface.NewRecognizer("/path/to/your/model.onnx", arcface.Config{
 })
 ```
 
+Liveness detection takes a face rectangle from any detector (it isn't tied to
+`face.FaceDetector`) and classifies it as a live face or a print/replay spoof:
+
+```go
+import "github.com/leandroveronezi/go-onnxface/liveness"
+
+liveness.DownloadModel("models") // both ensemble models together -- always used as a pair
+
+live, _ := liveness.NewDetector("models/minifasnet_v2.onnx", "models/minifasnet_v1se.onnx")
+defer live.Close()
+
+faces, _ := det.Detect(img) // any FaceDetector
+result, _ := live.Detect(img, faces[0].Rectangle)
+fmt.Println(result.IsLive, result.Score)
+```
+
 ## Requirements
 
 - Go with cgo support.
@@ -184,6 +205,8 @@ curl -sL -o models/face_detection_yunet_2023mar.onnx https://github.com/opencv/o
 curl -sL -o models/face_recognition_sface_2021dec.onnx https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
 curl -sL -o models/centerface.onnx https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/centerface.onnx
 curl -sL -o models/retinaface.onnx https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/retinaface.onnx
+curl -sL -o models/minifasnet_v2.onnx https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/minifasnet_v2.onnx
+curl -sL -o models/minifasnet_v1se.onnx https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/minifasnet_v1se.onnx
 
 go test ./...
 ```
@@ -191,14 +214,15 @@ go test ./...
 Tests that need the onnxruntime shared library or a model file skip
 themselves if it/they aren't present, so a partial fetch just skips fewer
 tests rather than failing the ones that don't need what's missing.
-`TestDownloadModels`/`centerface.TestDownloadModel`/`retinaface.TestDownloadModel`
-additionally do a real network download into a fresh directory each, to
-verify the download path itself (not just a pre-fetched file) works end to
-end. `arcface`'s test needs its own locally-provided (correctly licensed)
-model and skips itself without it -- see the doc comment on
-`TestRecognizerAgainstLocalModel` in `arcface/recognizer_test.go`.
+`TestDownloadModels`/`centerface.TestDownloadModel`/`retinaface.TestDownloadModel`/
+`liveness.TestDownloadModel` additionally do a real network download into a
+fresh directory each, to verify the download path itself (not just a
+pre-fetched file) works end to end. `arcface`'s test needs its own
+locally-provided (correctly licensed) model and skips itself without it --
+see the doc comment on `TestRecognizerAgainstLocalModel` in
+`arcface/recognizer_test.go`.
 
-### Why centerface.onnx/retinaface.onnx aren't straight upstream downloads
+### Why centerface.onnx/retinaface.onnx/minifasnet_*.onnx aren't straight upstream downloads
 
 - **centerface.onnx**: Star-Clouds' own published file declares a fixed
   `[10,3,32,32]` input (a PyTorch trace artifact with no `dynamic_axes` set)
@@ -217,9 +241,17 @@ model and skips itself without it -- see the doc comment on
   the float32 input/output tensors) were converted to float16 to bring it
   to ~52MB, re-validated afterward (box/landmark differences from the
   fp32 version are ~0.01px).
+- **minifasnet_v2.onnx/minifasnet_v1se.onnx**: same story as retinaface.onnx --
+  minivision-ai only publish PyTorch `.pth` weights. Produced with the
+  upstream repo's own model definitions (`src/model_lib/MiniFASNet.py`)
+  against their published `2.7_80x80_MiniFASNetV2.pth`/
+  `4_0_0_80x80_MiniFASNetV1SE.pth`, fixed 80x80 input, small enough
+  (~1.7MB each) that no float16 conversion was needed.
 
-Both are MIT (same as their upstream projects) and trained on WIDER FACE, so
-hosting modified/re-exported copies on go-onnxface's own
+All are MIT/Apache-2.0 (same as their upstream projects) and trained on
+tasks with no identity-labeled data (WIDER FACE bounding boxes, or
+Silent-Face-Anti-Spoofing's own live/spoof data), so hosting modified/
+re-exported copies on go-onnxface's own
 [`models-v1` release](https://github.com/leandroveronezi/go-onnxface/releases/tag/models-v1)
 doesn't change anything about their licensing.
 

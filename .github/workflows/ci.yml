@@ -32,6 +32,8 @@ jobs:
           curl -sL -o models/face_recognition_sface_2021dec.onnx "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
           curl -sL -o models/centerface.onnx "https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/centerface.onnx"
           curl -sL -o models/retinaface.onnx "https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/retinaface.onnx"
+          curl -sL -o models/minifasnet_v2.onnx "https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/minifasnet_v2.onnx"
+          curl -sL -o models/minifasnet_v1se.onnx "https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/minifasnet_v1se.onnx"
 
       - name: Resolve dependencies
         run: go mod tidy
