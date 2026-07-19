@@ -88,14 +88,21 @@ posadas:
   todos os pares -- um pouco mais otimista que o protocolo padrão de limiar
   validado por 10 folds cruzados que a maioria dos papers reporta.
 
-| Pacote | Medido (este repo, Go) | Referência publicada (modelo/paper original) |
-|---------|---------------------------|----------------------------------------------|
-| `yunet` | 70,67% recall | 88,44% / 86,56% / 75,03% AP fácil/médio/difícil ([opencv_zoo](https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/README.md)) |
-| `centerface` | 78,92% recall | 92,2% / 91,1% / 78,2% mAP fácil/médio/difícil, escala única ([upstream](https://github.com/Star-Clouds/CenterFace)) |
-| `retinaface` | 76,55% recall | 96,5% / 95,6% / 90,4% mAP fácil/médio/difícil ([paper](https://arxiv.org/abs/1905.00641)) |
-| `sface` | 97,11% acurácia | 95,26% ([paper](https://arxiv.org/abs/2205.12010), configuração ResNet50/CASIA-WebFace -- os pesos distribuídos são um MobileFaceNet mais leve, não necessariamente idêntico) |
-| `arcface` (buffalo_l) | 99,51% acurácia | 99,33% ([model zoo da InsightFace](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)) |
-| `ghostface` | 96,80% acurácia | 96,83% ([paper](https://www.researchgate.net/publication/369930264_GhostFaceNets_Lightweight_Face_Recognition_Model_from_Cheap_Operations)) |
+| Pacote | Medido (este repo, Go) | Latência média/imagem (CPU, veja nota) | Referência publicada (modelo/paper original) |
+|---------|---------------------------|-------------------------------------------|----------------------------------------------|
+| `yunet` | 70,67% recall | 36,8ms | 88,44% / 86,56% / 75,03% AP fácil/médio/difícil ([opencv_zoo](https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/README.md)) |
+| `centerface` | 78,92% recall | 247,5ms | 92,2% / 91,1% / 78,2% mAP fácil/médio/difícil, escala única ([upstream](https://github.com/Star-Clouds/CenterFace)) |
+| `retinaface` | 76,55% recall | 384,9ms | 96,5% / 95,6% / 90,4% mAP fácil/médio/difícil ([paper](https://arxiv.org/abs/1905.00641)) |
+| `sface` | 97,11% acurácia | -- | 95,26% ([paper](https://arxiv.org/abs/2205.12010), configuração ResNet50/CASIA-WebFace -- os pesos distribuídos são um MobileFaceNet mais leve, não necessariamente idêntico) |
+| `arcface` (buffalo_l) | 99,51% acurácia | -- | 99,33% ([model zoo da InsightFace](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)) |
+| `ghostface` | 96,80% acurácia | -- | 96,83% ([paper](https://www.researchgate.net/publication/369930264_GhostFaceNets_Lightweight_Face_Recognition_Model_from_Cheap_Operations)) |
+
+Latência é inferência só em CPU (sem GPU), medida em um Intel i7-1165G7
+(4 núcleos/8 threads) -- trate como direcional pro seu próprio hardware,
+não como número absoluto. Latência de reconhecimento ainda não foi
+medida (extração de feature em um rosto já recortado costuma ser bem
+mais barata que a detecção, mas ainda não foi instrumentada na
+ferramenta de benchmark).
 
 Pose é consistentemente o atributo mais difícil para os três detectores: os rostos com
 pose atípica do WIDER FACE derrubam o recall de ~73-81% (pose típica) para ~38-58%
