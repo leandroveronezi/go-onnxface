@@ -91,17 +91,6 @@ your way into; a from-scratch retrain on your own licensed data would be the onl
 route. This isn't legal advice, just how the ecosystem's licensing actually works
 in practice -- when unsure, ask a lawyer, not this README.
 
-DeepFace itself wraps several more recognition models (VGG-Face, Facenet, OpenFace,
-a community reimplementation of Facebook's original 2014 "DeepFace" paper, DeepID) --
-deliberately not added here. VGG-Face/OpenFace/the 2014 "DeepFace" are all pre-2018,
-superseded in accuracy by everything already in this table; Facenet is somewhere in
-between but still behind the ArcFace-loss generation. DeepID specifically was ruled
-out for a different reason on top of that: its only available weights come from a
-GPL-3.0-licensed repository, and porting that specific architecture to load them
-would risk creating a derivative work of GPL code inside an MIT-licensed project --
-a real problem independent of, and in addition to, the usual training-data licensing
-question.
-
 ## Usage
 
 The easy way -- mirrors go-recognizer: point at a directory, everything else
