@@ -1,7 +1,7 @@
-// Command detection demonstrates the low-level API with two
-// interchangeable detectors -- yunet.Detector and centerface.Detector --
-// both implementing face.FaceDetector, run side by side on the same
-// image.
+// Command detection demonstrates the low-level API with three
+// interchangeable detectors -- yunet.Detector, centerface.Detector and
+// retinaface.Detector -- all implementing face.FaceDetector, run side by
+// side on the same image.
 package main
 
 import (
@@ -12,6 +12,7 @@ import (
 
 	"github.com/leandroveronezi/go-onnxface"
 	"github.com/leandroveronezi/go-onnxface/centerface"
+	"github.com/leandroveronezi/go-onnxface/retinaface"
 	"github.com/leandroveronezi/go-onnxface/yunet"
 )
 
@@ -24,6 +25,18 @@ func loadImage(path string) (image.Image, error) {
 	}
 	defer f.Close()
 	return jpeg.Decode(f)
+}
+
+func detect(name string, det onnxface.FaceDetector, img image.Image) {
+	faces, err := det.Detect(img)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("%s: %d face(s)\n", name, len(faces))
+	for _, f := range faces {
+		fmt.Printf("  box=%v score=%.4f\n", f.Rectangle, f.Score)
+	}
 }
 
 func main() {
@@ -59,24 +72,15 @@ func main() {
 	}
 	defer cf.Close()
 
-	ynFaces, err := yn.Detect(img)
+	rf, err := retinaface.NewDetector(modelsDir + "/retinaface.onnx")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Printf("YuNet: %d face(s)\n", len(ynFaces))
-	for _, f := range ynFaces {
-		fmt.Printf("  box=%v score=%.4f\n", f.Rectangle, f.Score)
-	}
+	defer rf.Close()
 
-	cfFaces, err := cf.Detect(img)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("CenterFace: %d face(s)\n", len(cfFaces))
-	for _, f := range cfFaces {
-		fmt.Printf("  box=%v score=%.4f\n", f.Rectangle, f.Score)
-	}
+	detect("YuNet", yn, img)
+	detect("CenterFace", cf, img)
+	detect("RetinaFace", rf, img)
 
 }

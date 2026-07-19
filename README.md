@@ -28,12 +28,18 @@ was verified.
 |------|---------|-------|---------|-------|
 | Detection | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | Default. Fixed 640x640 input (letterboxed). |
 | Detection | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | Dynamic input size (resized to a multiple of 32, no letterbox distortion). |
+| Detection | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | Heaviest of the three (~109MB vs CenterFace's ~7.5MB/YuNet's ~230KB) and, per each project's own self-reported WIDER FACE hard-set numbers (not a unified benchmark, so treat as directional): the most accurate -- RetinaFace resnet50 ~84-90% vs CenterFace ~87% vs YuNet ~75%. Fixed 640x640 input (letterboxed). |
 | Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
 | Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
 
 **Status**: early development.
-- ✅ Detection (`yunet.Detector`, `centerface.Detector`) -- each validated against
-  its own real Python/OpenCV reference run (box/landmarks/score match within ~1-2px).
+- ✅ Detection (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
+  each validated against its own real Python reference run (box/landmarks/score
+  match within ~1-2px). `models/retinaface.onnx` isn't a direct download like the
+  others: InsightFace/biubug6 only publish PyTorch `.pth` weights, so it was
+  produced with the repository's own `convert_to_onnx.py`, loading their published
+  `Resnet50_Final.pth` (state_dict keys matched with zero missing/unexpected) --
+  only the export step is ours, the weights are unmodified.
 - ✅ Recognition (`sface.Recognizer`) -- `Align`/`Feature` validated against a
   real `cv2.FaceRecognizerSF` run (same-person cosine ~1.0, different-person
   cosine ~0.11-0.12 on both implementations, well below SFace's ~0.363
