@@ -4,6 +4,8 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/leandroveronezi/go-onnxface.svg)](https://pkg.go.dev/github.com/leandroveronezi/go-onnxface)
 ![MIT Licensed](https://img.shields.io/github/license/leandroveronezi/go-onnxface.svg)
 
+🇧🇷 [Leia em português](README.pt-BR.md)
+
 Face detection and recognition for Go, backed by [ONNX Runtime](https://onnxruntime.ai)
 instead of dlib. Sibling project to [go-face](https://github.com/leandroveronezi/go-face)/
 [go-recognizer](https://github.com/leandroveronezi/go-recognizer), aimed at better accuracy
