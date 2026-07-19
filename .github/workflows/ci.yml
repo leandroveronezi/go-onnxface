@@ -25,6 +25,14 @@ jobs:
           tar xzf ort.tgz
           echo "ONNXFACE_ORT_LIB=$PWD/onnxruntime-linux-x64-${ORT_VERSION}/lib/libonnxruntime.so.${ORT_VERSION}" >> "$GITHUB_ENV"
 
+      - name: Fetch models
+        run: |
+          mkdir -p models
+          curl -sL -o models/face_detection_yunet_2023mar.onnx "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+          curl -sL -o models/face_recognition_sface_2021dec.onnx "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
+          curl -sL -o models/centerface.onnx "https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/centerface.onnx"
+          curl -sL -o models/retinaface.onnx "https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/retinaface.onnx"
+
       - name: Resolve dependencies
         run: go mod tidy
 

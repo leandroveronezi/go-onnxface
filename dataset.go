@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/leandroveronezi/go-onnxface/face"
 )
 
 // SaveDataset saves Dataset to a JSON file at path.
@@ -29,7 +31,7 @@ loaded entries immediately, with no separate step needed.
 */
 func (r *Recognizer) LoadDataset(path string) error {
 
-	if !fileExists(path) {
+	if !face.FileExists(path) {
 		return fmt.Errorf("%s: file not found", path)
 	}
 

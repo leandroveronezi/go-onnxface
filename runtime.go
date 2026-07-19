@@ -6,10 +6,11 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/leandroveronezi/go-onnxface/face"
 )
 
 // onnxRuntimeVersion is the onnxruntime release DownloadModels fetches
@@ -106,7 +107,7 @@ func downloadRuntimeLibrary(dir string) error {
 		return err
 	}
 	dest := filepath.Join(dir, libName)
-	if fileExists(dest) {
+	if face.FileExists(dest) {
 		return nil
 	}
 
@@ -116,7 +117,7 @@ func downloadRuntimeLibrary(dir string) error {
 	}
 
 	archivePath := filepath.Join(dir, filepath.Base(asset.url))
-	if err := downloadFile(archivePath, asset.url); err != nil {
+	if err := face.DownloadFile(archivePath, asset.url); err != nil {
 		return fmt.Errorf("downloading onnxruntime: %w", err)
 	}
 	defer os.Remove(archivePath)
@@ -125,33 +126,6 @@ func downloadRuntimeLibrary(dir string) error {
 		return extractZipMember(archivePath, asset.member, dest)
 	}
 	return extractTarGzMember(archivePath, asset.member, dest)
-
-}
-
-func downloadFile(path, url string) error {
-
-	resp, err := modelsHTTPClient.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: unexpected status %s", url, resp.Status)
-	}
-
-	out, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(out, resp.Body); err != nil {
-		out.Close()
-		os.Remove(path)
-		return err
-	}
-
-	return out.Close()
 
 }
 

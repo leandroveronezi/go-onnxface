@@ -1,10 +1,10 @@
 package onnxface
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
-	"time"
+
+	"github.com/leandroveronezi/go-onnxface/face"
 )
 
 // defaultDetectorModel and defaultRecognizerModel are the file names
@@ -24,12 +24,13 @@ const (
 // against (see the README for the license of each).
 const opencvZooRawBase = "https://github.com/opencv/opencv_zoo/raw/main/models/"
 
-var modelsHTTPClient = &http.Client{Timeout: 5 * time.Minute}
-
 /*
 DownloadModels downloads everything Recognizer.Init needs by default into
 dir, creating dir if it doesn't exist yet: the onnxruntime shared library
-for the current platform, and the default YuNet/SFace model files.
+for the current platform, and the default YuNet/SFace model files. For
+the other engines (centerface, retinaface), see each package's own
+DownloadModel -- kept separate so using one engine never downloads the
+others.
 
 Any file that already exists in dir is left untouched and not
 re-downloaded, so it's safe to call this on every startup before Init.
@@ -47,7 +48,7 @@ func (r *Recognizer) DownloadModels(dir string) error {
 	for _, name := range []string{defaultDetectorModel, defaultRecognizerModel} {
 
 		path := filepath.Join(dir, name)
-		if fileExists(path) {
+		if face.FileExists(path) {
 			continue
 		}
 
@@ -75,11 +76,6 @@ func downloadModel(path, name string) error {
 		modelDir = "face_recognition_sface"
 	}
 
-	return downloadFile(path, opencvZooRawBase+modelDir+"/"+name)
+	return face.DownloadFile(path, opencvZooRawBase+modelDir+"/"+name)
 
-}
-
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
 }

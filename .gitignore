@@ -20,3 +20,9 @@
 # onnxruntime shared library -- large platform-specific binary, not
 # checked in. See README for how to obtain it.
 /onnxruntime/
+
+# Model weights -- not checked in (see the README's Licensing and
+# Development sections for why, and how to fetch them: DownloadModels,
+# <engine>.DownloadModel, or curl directly for local dev).
+/models/*
+

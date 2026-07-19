@@ -35,14 +35,11 @@ was verified.
 **Status**: early development.
 - ✅ Detection (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
   each validated against its own real Python reference run (box/landmarks/score
-  match within ~1-2px). `models/retinaface.onnx` isn't a direct download like the
-  others: InsightFace/biubug6 only publish PyTorch `.pth` weights, so it was
-  produced with the repository's own `convert_to_onnx.py`, loading their published
-  `Resnet50_Final.pth` (state_dict keys matched with zero missing/unexpected) --
-  only the export step is ours, the weights are unmodified. The fp32 export was
-  ~109MB, over GitHub's 100MB file limit; weights (not the float32 input/output
-  tensors) were converted to float16 to bring it to ~52MB, re-validated afterward
-  (box/landmark differences from the fp32 version are ~0.01px).
+  match within ~1-2px). CenterFace's and RetinaFace's `.onnx` files aren't
+  straight upstream downloads (see Development below for why and how they were
+  produced) and, unlike YuNet/SFace, aren't hosted by their own upstream project
+  either -- `centerface.DownloadModel`/`retinaface.DownloadModel` fetch go-onnxface's
+  own copies instead (see the Development section).
 - ✅ Recognition (`sface.Recognizer`) -- `Align`/`Feature` validated against a
   real `cv2.FaceRecognizerSF` run (same-person cosine ~1.0, different-person
   cosine ~0.11-0.12 on both implementations, well below SFace's ~0.363
@@ -125,6 +122,10 @@ import (
 onnxface.InitEnvironment("/path/to/libonnxruntime.so")
 defer onnxface.CloseEnvironment()
 
+// Each engine fetches only its own model -- using centerface here never
+// downloads yunet/sface too, and vice versa.
+centerface.DownloadModel("models")
+
 det, _ := centerface.NewDetector("models/centerface.onnx")
 rec, _ := sface.NewRecognizer("models/face_recognition_sface_2021dec.onnx")
 
@@ -167,19 +168,60 @@ rec, _ := arcface.NewRecognizer("/path/to/your/model.onnx", arcface.Config{
 
 ## Development
 
-Tests that need the onnxruntime shared library read its path from the
-`ONNXFACE_ORT_LIB` environment variable and skip themselves if it's unset:
+No model weights are checked into this repository (see Licensing above for
+why, for `arcface` at least -- for the others it's to keep clones small and
+avoid GitHub's file-size limits, the same reason DeepFace's own weights live
+in a separate release rather than its main repo). Fetch what the tests need
+into `models/` before running them:
 
 ```bash
 curl -sL -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-linux-x64-1.26.0.tgz
 tar xzf ort.tgz
-ONNXFACE_ORT_LIB="$PWD/onnxruntime-linux-x64-1.26.0/lib/libonnxruntime.so.1.26.0" go test ./...
+export ONNXFACE_ORT_LIB="$PWD/onnxruntime-linux-x64-1.26.0/lib/libonnxruntime.so.1.26.0"
+
+mkdir -p models
+curl -sL -o models/face_detection_yunet_2023mar.onnx https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+curl -sL -o models/face_recognition_sface_2021dec.onnx https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
+curl -sL -o models/centerface.onnx https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/centerface.onnx
+curl -sL -o models/retinaface.onnx https://github.com/leandroveronezi/go-onnxface/releases/download/models-v1/retinaface.onnx
+
+go test ./...
 ```
 
-`TestDownloadModels` additionally does a real network download to verify the
-auto-download path itself works end to end. `arcface`'s test needs its own
-locally-provided (correctly licensed) model and skips itself without it -- see
-the doc comment on `TestRecognizerAgainstLocalModel` in `arcface/recognizer_test.go`.
+Tests that need the onnxruntime shared library or a model file skip
+themselves if it/they aren't present, so a partial fetch just skips fewer
+tests rather than failing the ones that don't need what's missing.
+`TestDownloadModels`/`centerface.TestDownloadModel`/`retinaface.TestDownloadModel`
+additionally do a real network download into a fresh directory each, to
+verify the download path itself (not just a pre-fetched file) works end to
+end. `arcface`'s test needs its own locally-provided (correctly licensed)
+model and skips itself without it -- see the doc comment on
+`TestRecognizerAgainstLocalModel` in `arcface/recognizer_test.go`.
+
+### Why centerface.onnx/retinaface.onnx aren't straight upstream downloads
+
+- **centerface.onnx**: Star-Clouds' own published file declares a fixed
+  `[10,3,32,32]` input (a PyTorch trace artifact with no `dynamic_axes` set)
+  that ONNX Runtime enforces strictly, even though `cv2.dnn` -- what
+  CenterFace's own reference implementation uses -- tolerates it. This copy
+  has only its shape metadata relaxed to dynamic batch/height/width (via
+  `onnx.save`, not touching the trained weights) so it works with
+  `onnxruntime_go`'s `DynamicAdvancedSession`.
+- **retinaface.onnx**: InsightFace/biubug6 only publish PyTorch `.pth`
+  weights, no ONNX export at all. Produced with the upstream repo's own
+  `convert_to_onnx.py` against their published `Resnet50_Final.pth`
+  (state_dict keys matched with zero missing/unexpected, confirming the
+  right checkpoint), fixed 640x640 input. The fp32 export was ~109MB, over
+  GitHub's 100MB git file-size limit (release assets don't have that
+  limit, but the file was already being produced anyway); weights (not
+  the float32 input/output tensors) were converted to float16 to bring it
+  to ~52MB, re-validated afterward (box/landmark differences from the
+  fp32 version are ~0.01px).
+
+Both are MIT (same as their upstream projects) and trained on WIDER FACE, so
+hosting modified/re-exported copies on go-onnxface's own
+[`models-v1` release](https://github.com/leandroveronezi/go-onnxface/releases/tag/models-v1)
+doesn't change anything about their licensing.
 
 ## License
 
