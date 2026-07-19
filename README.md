@@ -31,6 +31,7 @@ was verified.
 | Detection | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | Heaviest of the three (~52MB float16 vs CenterFace's ~7.5MB/YuNet's ~230KB) and, per each project's own self-reported WIDER FACE hard-set numbers (not a unified benchmark, so treat as directional): the most accurate -- RetinaFace resnet50 ~84-90% vs CenterFace ~87% vs YuNet ~75%. Fixed 640x640 input (letterboxed). |
 | Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
 | Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
+| Recognition | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depends on your weights* | Same situation as `arcface` (MS1MV2/MS1MV3-trained) -- a bridge, no bundled/downloaded weights. Modern (2023) and competitive with ArcFace (~99.7% LFW), unlike the other DeepFace-wrapped recognition models (VGG-Face/OpenFace/2014-era "DeepFace"), which are old enough that adding them wouldn't beat what's already here. |
 | Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. Takes a rectangle from any detector, not tied to the `face.FaceDetector` contract. |
 
 **Status**: early development.
@@ -56,6 +57,12 @@ was verified.
   its README), validated against a real onnxruntime run of the unmodified
   original models on `testdata/amy.jpg` (a real photo, correctly scored
   live, ~0.99).
+- ✅ `ghostface` bridge (code only, bring your own weights, same reasoning as
+  `arcface`) -- validated locally against a real GhostFaceNetV1 run, converted
+  from the original Keras weights via tf2onnx (same-person cosine ~1.0,
+  different-person cosine ~0.008, using the exact landmarks the Go side
+  itself produced -- confirms the alignment/preprocessing port is correct,
+  not just "close enough").
 
 ### Licensing: why so few recognition models
 
@@ -69,15 +76,31 @@ purposes only" -- that restriction carries over to the weights regardless of the
 actually use). SFace is the one exception found so far: OpenCV Zoo distributes its
 specific weights under an explicit Apache-2.0 grant.
 
-The `arcface` package exists for the rest of that family anyway, but deliberately
-as *just code*: it doesn't ship or download any `.onnx` file, because doing so would
-mean this MIT-licensed repository redistributing someone else's non-commercial-only
-weights -- the wrapper's own license doesn't change what license the weights carry.
-Bring your own file, and make sure you have the rights to it for how you intend to
-use it: research use of InsightFace's published `buffalo_l`/`antelopev2` is generally
-fine under their terms, commercial use needs their paid license (see their commercial
-licensing page). This isn't legal advice, just how the ecosystem's licensing actually
-works in practice -- when unsure, ask a lawyer, not this README.
+The `arcface`/`ghostface` packages exist for models in that family anyway, but
+deliberately as *just code*: neither ships or downloads any `.onnx` file, because
+doing so would mean this MIT-licensed repository redistributing someone else's
+non-commercial-only weights -- the wrapper's own license doesn't change what
+license the weights carry. Bring your own file, and make sure you have the rights
+to it for how you intend to use it: research use of InsightFace's published
+`buffalo_l`/`antelopev2` is generally fine under their terms, commercial use needs
+their paid license (see their commercial licensing page). GhostFaceNets' own
+MS1MV2/MS1MV3-trained weights carry the same research-only restriction, but --
+unlike InsightFace -- HamadYA doesn't offer a paid commercial license at all, so
+commercial use of that specific weight file isn't something you can currently buy
+your way into; a from-scratch retrain on your own licensed data would be the only
+route. This isn't legal advice, just how the ecosystem's licensing actually works
+in practice -- when unsure, ask a lawyer, not this README.
+
+DeepFace itself wraps several more recognition models (VGG-Face, Facenet, OpenFace,
+a community reimplementation of Facebook's original 2014 "DeepFace" paper, DeepID) --
+deliberately not added here. VGG-Face/OpenFace/the 2014 "DeepFace" are all pre-2018,
+superseded in accuracy by everything already in this table; Facenet is somewhere in
+between but still behind the ArcFace-loss generation. DeepID specifically was ruled
+out for a different reason on top of that: its only available weights come from a
+GPL-3.0-licensed repository, and porting that specific architecture to load them
+would risk creating a derivative work of GPL code inside an MIT-licensed project --
+a real problem independent of, and in addition to, the usual training-data licensing
+question.
 
 ## Usage
 
@@ -159,6 +182,14 @@ rec, _ := arcface.NewRecognizer("/path/to/your/model.onnx", arcface.Config{
     InputName:  "input.1", // inspect your own file -- see the arcface package doc
     OutputName: "683",
 })
+```
+
+`ghostface` is a narrower bridge (one specific architecture, GhostFaceNetV1, not
+"any ONNX export of this family" like `arcface`), so it doesn't need a `Config` --
+just point it at your own conversion (see the package doc for the exact recipe):
+
+```go
+rec, _ := ghostface.NewRecognizer("/path/to/your/ghostfacenet.onnx")
 ```
 
 Liveness detection takes a face rectangle from any detector (it isn't tied to
