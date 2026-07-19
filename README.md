@@ -29,6 +29,7 @@ was verified.
 | Detection | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | Default. Fixed 640x640 input (letterboxed). |
 | Detection | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | Dynamic input size (resized to a multiple of 32, no letterbox distortion). |
 | Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
+| Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
 
 **Status**: early development.
 - ✅ Detection (`yunet.Detector`, `centerface.Detector`) -- each validated against
@@ -39,6 +40,10 @@ was verified.
   same-person threshold).
 - ✅ Easy API (`Recognizer`, file-path driven, auto-downloading) and low-level
   API (`Engine`, `Compare`, working with `image.Image`) -- see Usage below.
+- ✅ `arcface` bridge (code only, bring your own weights) -- validated locally
+  against a real InsightFace `buffalo_l` (`w600k_r50.onnx`) run (same-person
+  cosine ~1.0, different-person cosine ~-0.03); not part of CI since it needs
+  weights this repo can't ship.
 - ⏳ Liveness/anti-spoof support -- planned for later.
 
 ### Licensing: why so few recognition models
@@ -51,9 +56,17 @@ trained on MS1M/CASIA-WebFace/VGGFace2-lineage datasets released "for research
 purposes only" -- that restriction carries over to the weights regardless of the
 *code's* license (MIT code around non-commercial weights is still non-commercial to
 actually use). SFace is the one exception found so far: OpenCV Zoo distributes its
-specific weights under an explicit Apache-2.0 grant. If you need higher recognition
-accuracy than SFace and can accept a paid license, the InsightFace/ArcFace family
-(`buffalo_l` and similar) is the usual next step -- see their commercial licensing page.
+specific weights under an explicit Apache-2.0 grant.
+
+The `arcface` package exists for the rest of that family anyway, but deliberately
+as *just code*: it doesn't ship or download any `.onnx` file, because doing so would
+mean this MIT-licensed repository redistributing someone else's non-commercial-only
+weights -- the wrapper's own license doesn't change what license the weights carry.
+Bring your own file, and make sure you have the rights to it for how you intend to
+use it: research use of InsightFace's published `buffalo_l`/`antelopev2` is generally
+fine under their terms, commercial use needs their paid license (see their commercial
+licensing page). This isn't legal advice, just how the ecosystem's licensing actually
+works in practice -- when unsure, ask a lawyer, not this README.
 
 ## Usage
 
@@ -118,10 +131,20 @@ result := onnxface.Compare(results[0].Feature, knownFeature, 1.128)
 fmt.Println(result.IsMatch, result.Distance, result.Confidence)
 ```
 
-`yunet`/`centerface`/`sface` implement the shared `onnxface.FaceDetector`/
+`yunet`/`centerface`/`sface`/`arcface` implement the shared `onnxface.FaceDetector`/
 `FaceRecognizer` contract (in the `face` subpackage) -- a future engine is a new
 subpackage implementing that contract, not a change to existing code. See
 `examples/` for complete, runnable programs.
+
+Using `arcface` (see its Licensing note above) means supplying your own model file
+plus its tensor names, since those vary across ArcFace exports:
+
+```go
+rec, _ := arcface.NewRecognizer("/path/to/your/model.onnx", arcface.Config{
+    InputName:  "input.1", // inspect your own file -- see the arcface package doc
+    OutputName: "683",
+})
+```
 
 ## Requirements
 
@@ -145,7 +168,9 @@ ONNXFACE_ORT_LIB="$PWD/onnxruntime-linux-x64-1.26.0/lib/libonnxruntime.so.1.26.0
 ```
 
 `TestDownloadModels` additionally does a real network download to verify the
-auto-download path itself works end to end.
+auto-download path itself works end to end. `arcface`'s test needs its own
+locally-provided (correctly licensed) model and skips itself without it -- see
+the doc comment on `TestRecognizerAgainstLocalModel` in `arcface/recognizer_test.go`.
 
 ## License
 
