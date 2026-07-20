@@ -72,7 +72,7 @@ facial cai. Veja o link de cada linha para como isso foi verificado.
 
 ### Benchmarks
 
-Medido contra dois datasets reais e não curados -- escolhidos especificamente por
+Medido contra datasets reais e não curados -- escolhidos especificamente por
 incluírem variação real de pose/iluminação/oclusão, em vez de fotos de estúdio
 posadas:
 
@@ -83,26 +83,39 @@ posadas:
   average precision estilo PASCAL-VOC), então trate as duas colunas abaixo como
   comparáveis em direção, não como a mesma métrica.
 - **Reconhecimento**: [CFP-FP](http://www.cfpw.io/) (Celebrities in Frontal-Profile)
-  -- 7.000 pares de verificação frontal-vs-perfil em todos os 10 folds. Métrica:
-  acurácia no único limiar de melhor desempenho possível, varrido post-hoc sobre
-  todos os pares -- um pouco mais otimista que o protocolo padrão de limiar
-  validado por 10 folds cruzados que a maioria dos papers reporta.
+  -- 7.000 pares de verificação frontal-vs-perfil em todos os 10 folds -- e
+  [AgeDB](https://ibug.doc.ic.ac.uk/resources/agedb/) -- 7.000 pares gerados
+  localmente (identidade igual/diferente, seed fixa) a partir de um reempacotamento
+  com 567 identidades/16.488 imagens, já que o AgeDB não vem com um protocolo fixo
+  como o CFP-FP. Métrica pros dois: acurácia no único limiar de melhor desempenho
+  possível, varrido post-hoc sobre todos os pares -- um pouco mais otimista que o
+  protocolo padrão de limiar validado por 10 folds cruzados que a maioria dos papers
+  reporta.
+- **Liveness**: split de teste do [CelebA-Spoof](https://github.com/ZhangYuanhan-AI/CelebA-Spoof)
+  -- ~6.700 imagens (1 dos 10 shards públicos), proporção aproximada de 30%/70%
+  vivo/spoof.
 
 | Pacote | Medido (este repo, Go) | Latência média/imagem (CPU, veja nota) | Referência publicada (modelo/paper original) |
 |---------|---------------------------|-------------------------------------------|----------------------------------------------|
 | `yunet` | 70,67% recall | 36,8ms | 88,44% / 86,56% / 75,03% AP fácil/médio/difícil ([opencv_zoo](https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/README.md)) |
 | `centerface` | 78,92% recall | 247,5ms | 92,2% / 91,1% / 78,2% mAP fácil/médio/difícil, escala única ([upstream](https://github.com/Star-Clouds/CenterFace)) |
 | `retinaface` | 76,55% recall | 384,9ms | 96,5% / 95,6% / 90,4% mAP fácil/médio/difícil ([paper](https://arxiv.org/abs/1905.00641)) |
-| `sface` | 97,11% acurácia | -- | 95,26% ([paper](https://arxiv.org/abs/2205.12010), configuração ResNet50/CASIA-WebFace -- os pesos distribuídos são um MobileFaceNet mais leve, não necessariamente idêntico) |
-| `arcface` (buffalo_l) | 99,51% acurácia | -- | 99,33% ([model zoo da InsightFace](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)) |
-| `ghostface` | 96,80% acurácia | -- | 96,83% ([paper](https://www.researchgate.net/publication/369930264_GhostFaceNets_Lightweight_Face_Recognition_Model_from_Cheap_Operations)) |
+| `sface` (CFP-FP / AgeDB) | 97,13% / 95,47% acurácia | 15,5ms | 95,26% CFP-FP ([paper](https://arxiv.org/abs/2205.12010), configuração ResNet50/CASIA-WebFace -- os pesos distribuídos são um MobileFaceNet mais leve, não necessariamente idêntico) |
+| `arcface` (buffalo_l, CFP-FP / AgeDB) | 99,51% / 97,78% acurácia | 112,9ms | 99,33% CFP-FP ([model zoo da InsightFace](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)) |
+| `ghostface` (CFP-FP / AgeDB) | 96,80% / 96,48% acurácia | 13,7ms | 96,83% CFP-FP ([paper](https://www.researchgate.net/publication/369930264_GhostFaceNets_Lightweight_Face_Recognition_Model_from_Cheap_Operations)) |
+| `liveness` (CelebA-Spoof) | 74,18% vivo / 69,67% spoof acurácia | ~12ms | -- (avaliado como classificador vivo/spoof genérico, não no split específico de print/replay que os números do próprio README dele já validam) |
 
 Latência é inferência só em CPU (sem GPU), medida em um Intel i7-1165G7
 (4 núcleos/8 threads) -- trate como direcional pro seu próprio hardware,
-não como número absoluto. Latência de reconhecimento ainda não foi
-medida (extração de feature em um rosto já recortado costuma ser bem
-mais barata que a detecção, mas ainda não foi instrumentada na
-ferramenta de benchmark).
+não como número absoluto. O AgeDB é um benchmark mais difícil que o CFP-FP
+pra todo mundo (testa variação de idade, não só pose frontal-vs-perfil) --
+o `arcface` cai mais que os outros (99,51%->97,78%), sugerindo que ele
+generaliza um pouco pior pra variação de idade especificamente. Os
+números do `liveness` no CelebA-Spoof são bem mais baixos do que uma foto
+real de chamada em sala de aula produziria (veja a validação específica
+de print/replay já descrita acima) -- as imagens do CelebA-Spoof são
+capturas de câmera de vigilância em baixa resolução, que exigem mais do
+modelo do que uma foto de celular/webcam.
 
 Pose é consistentemente o atributo mais difícil para os três detectores: os rostos com
 pose atípica do WIDER FACE derrubam o recall de ~73-81% (pose típica) para ~38-58%
