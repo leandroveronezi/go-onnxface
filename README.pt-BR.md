@@ -95,15 +95,27 @@ posadas:
   -- ~6.700 imagens (1 dos 10 shards públicos), proporção aproximada de 30%/70%
   vivo/spoof.
 
-| Pacote | Medido (este repo, Go) | Latência média/imagem (CPU, veja nota) | Referência publicada (modelo/paper original) |
-|---------|---------------------------|-------------------------------------------|----------------------------------------------|
-| `yunet` | 70,67% recall | 36,8ms | 88,44% / 86,56% / 75,03% AP fácil/médio/difícil ([opencv_zoo](https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/README.md)) |
-| `centerface` | 78,92% recall | 247,5ms | 92,2% / 91,1% / 78,2% mAP fácil/médio/difícil, escala única ([upstream](https://github.com/Star-Clouds/CenterFace)) |
-| `retinaface` | 76,55% recall | 384,9ms | 96,5% / 95,6% / 90,4% mAP fácil/médio/difícil ([paper](https://arxiv.org/abs/1905.00641)) |
-| `sface` (CFP-FP / AgeDB) | 97,13% / 95,47% acurácia | 15,5ms | 95,26% CFP-FP ([paper](https://arxiv.org/abs/2205.12010), configuração ResNet50/CASIA-WebFace -- os pesos distribuídos são um MobileFaceNet mais leve, não necessariamente idêntico) |
-| `arcface` (buffalo_l, CFP-FP / AgeDB) | 99,51% / 97,78% acurácia | 112,9ms | 99,33% CFP-FP ([model zoo da InsightFace](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)) |
-| `ghostface` (CFP-FP / AgeDB) | 96,80% / 96,48% acurácia | 13,7ms | 96,83% CFP-FP ([paper](https://www.researchgate.net/publication/369930264_GhostFaceNets_Lightweight_Face_Recognition_Model_from_Cheap_Operations)) |
-| `liveness` (CelebA-Spoof) | 74,18% vivo / 69,67% spoof acurácia | ~12ms | -- (avaliado como classificador vivo/spoof genérico, não no split específico de print/replay que os números do próprio README dele já validam) |
+**Detecção (WIDER FACE):**
+
+| Pacote | Recall | Latência média/imagem (CPU, veja nota) | Referência publicada (modelo/paper original) |
+|---------|--------|-------------------------------------------|----------------------------------------------|
+| `yunet` | 70,67% | 36,8ms | 88,44% / 86,56% / 75,03% AP fácil/médio/difícil ([opencv_zoo](https://github.com/opencv/opencv_zoo/blob/main/models/face_detection_yunet/README.md)) |
+| `centerface` | 78,92% | 247,5ms | 92,2% / 91,1% / 78,2% mAP fácil/médio/difícil, escala única ([upstream](https://github.com/Star-Clouds/CenterFace)) |
+| `retinaface` | 76,55% | 384,9ms | 96,5% / 95,6% / 90,4% mAP fácil/médio/difícil ([paper](https://arxiv.org/abs/1905.00641)) |
+
+**Reconhecimento (CFP-FP e AgeDB, uma coluna pra cada):**
+
+| Pacote | Acurácia CFP-FP | Acurácia AgeDB | Latência média/imagem (CPU) | Referência publicada |
+|---------|------------------|-----------------|---------------------------|----------------------|
+| `sface` | 97,13% | 95,47% | 15,5ms | 95,26% CFP-FP ([paper](https://arxiv.org/abs/2205.12010), configuração ResNet50/CASIA-WebFace -- os pesos distribuídos são um MobileFaceNet mais leve, não necessariamente idêntico) |
+| `arcface` (buffalo_l) | 99,51% | 97,78% | 112,9ms | 99,33% CFP-FP ([model zoo da InsightFace](https://github.com/deepinsight/insightface/blob/master/model_zoo/README.md)) |
+| `ghostface` | 96,80% | 96,48% | 13,7ms | 96,83% CFP-FP ([paper](https://www.researchgate.net/publication/369930264_GhostFaceNets_Lightweight_Face_Recognition_Model_from_Cheap_Operations)) |
+
+**Liveness (CelebA-Spoof):**
+
+| Pacote | Acurácia vivo | Acurácia spoof | Latência média/imagem (CPU) |
+|---------|----------------|------------------|---------------------------|
+| `liveness` | 74,18% | 69,67% | ~12ms |
 
 Latência é inferência só em CPU (sem GPU), medida em um Intel i7-1165G7
 (4 núcleos/8 threads) -- trate como direcional pro seu próprio hardware,
