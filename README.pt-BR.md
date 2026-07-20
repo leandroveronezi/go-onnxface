@@ -20,7 +20,7 @@ Microsoft publica bibliotecas compartilhadas pré-compiladas por plataforma.
 mesma forma que o `DownloadModels` do go-recognizer baixa os arquivos de modelo do dlib
 -- sem passo manual de "caminho do .so".
 
-### Engines
+## Engines
 
 Cada modelo aqui foi escolhido por ter uma licença explícita e de uso comercial nos
 *pesos publicados* -- não apenas código permissivo envolvendo pesos treinados em um
@@ -47,44 +47,41 @@ engines de detecção/reconhecimento.
 Veja [Benchmarks](#benchmarks) abaixo pros números de acurácia/latência de cada pacote.
 
 **Status**: em desenvolvimento inicial.
-- ✅ Detecção (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
-  cada um validado contra sua própria execução de referência real em Python
+- ✅ **Detecção** (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`)
+  -- cada um validado contra sua própria execução de referência real em Python
   (caixa/landmarks/score batem com diferença de ~1-2px). Os arquivos `.onnx` do
   CenterFace e do RetinaFace não são downloads diretos do upstream (veja
   Desenvolvimento abaixo para o porquê e como foram produzidos) e, diferente de
   YuNet/SFace, também não são hospedados pelo próprio projeto upstream --
   `centerface.DownloadModel`/`retinaface.DownloadModel` baixam cópias próprias do
-  go-onnxface (veja a seção Desenvolvimento).
-- ✅ Reconhecimento (`sface.Recognizer`) -- `Align`/`Feature` validados contra uma
-  execução real do `cv2.FaceRecognizerSF` (cosine ~1,0 mesma pessoa, ~0,11-0,12
+  go-onnxface.
+- ✅ **Reconhecimento** (`sface.Recognizer`) -- `Align`/`Feature` validados contra
+  uma execução real do `cv2.FaceRecognizerSF` (cosine ~1,0 mesma pessoa, ~0,11-0,12
   pessoas diferentes em ambas as implementações, bem abaixo do limiar de ~0,363
-  do SFace para mesma pessoa).
-- ✅ API fácil (`Recognizer`, orientada a caminho de arquivo, com download automático)
-  e API de baixo nível (`Engine`, `Compare`, trabalhando com `image.Image`) -- veja
-  Uso abaixo.
-- ✅ Ponte `arcface` (só código, traga seus próprios pesos) -- validada localmente
-  contra uma execução real do `buffalo_l` (`w600k_r50.onnx`) da InsightFace (cosine
-  ~1,0 mesma pessoa, ~-0,03 pessoas diferentes); não faz parte do CI porque precisa
-  de pesos que este repositório não pode distribuir.
-- ✅ Liveness/anti-spoof (`liveness.Detector`) -- a matemática de recorte/pré-
-  processamento/ensemble portada linha a linha da própria fonte do
-  Silent-Face-Anti-Spoofing (não só do README), validada contra uma execução real
-  via onnxruntime dos modelos originais sem modificação em `testdata/amy.jpg` (uma
-  foto real, corretamente classificada como ao vivo, ~0,99).
-- ✅ Liveness/anti-spoof (`seetaface6.Detector`) -- a fusão fas_first/fas_second
-  (gate SSD de imagem inteira, classificador de recorte alinhado convertido pra
-  YCrCb) portada linha a linha do código-fonte C++ do próprio SeetaFace6
-  (`FaceAntiSpoofingX/src/seeta/FaceAntiSpoofing.cpp`), validada contra uma
-  execução real via onnxruntime em `testdata/amy.jpg` (corretamente classificada
-  como ao vivo, ~0,999).
-- ✅ Ponte `ghostface` (só código, traga seus próprios pesos, mesmo raciocínio do
-  `arcface`) -- validada localmente contra uma execução real do GhostFaceNetV1,
-  convertido dos pesos originais em Keras via tf2onnx (cosine ~1,0 mesma pessoa,
-  ~0,008 pessoas diferentes, usando exatamente os landmarks que o próprio lado Go
-  produziu -- confirma que o port do alinhamento/pré-processamento está correto,
-  não só "próximo o suficiente").
+  do SFace para mesma pessoa). As pontes `arcface`/`ghostface` (só código, traga
+  seus próprios pesos) são validadas do mesmo jeito contra suas próprias
+  execuções de referência reais -- `arcface` contra o `buffalo_l`
+  (`w600k_r50.onnx`) da InsightFace (cosine ~1,0 mesma pessoa, ~-0,03 pessoas
+  diferentes), `ghostface` contra uma execução do GhostFaceNetV1 convertido dos
+  pesos originais em Keras via tf2onnx (cosine ~1,0 mesma pessoa, ~0,008
+  pessoas diferentes, usando exatamente os landmarks que o próprio lado Go
+  produziu); nenhuma das duas faz parte do CI porque precisam de pesos que este
+  repositório não pode distribuir.
+- ✅ **Liveness/anti-spoof** (`liveness.Detector`, `seetaface6.Detector`) -- a
+  matemática de recorte/pré-processamento/ensemble do `liveness` portada linha a
+  linha da própria fonte do Silent-Face-Anti-Spoofing, a fusão fas_first/
+  fas_second do `seetaface6` (gate SSD de imagem inteira, classificador de
+  recorte alinhado convertido pra YCrCb) portada linha a linha do código-fonte
+  C++ do próprio SeetaFace6 (`FaceAntiSpoofingX/src/seeta/FaceAntiSpoofing.cpp`)
+  -- ambos validados contra uma execução real via onnxruntime dos modelos
+  originais sem modificação em `testdata/amy.jpg` (uma foto real, corretamente
+  classificada como ao vivo: ~0,99 no `liveness`, ~0,999 no `seetaface6`).
+- ✅ **API fácil** (`Recognizer`, orientada a caminho de arquivo, com download
+  automático, engines de detecção/reconhecimento/liveness configuráveis) e
+  **API de baixo nível** (`Engine`, `Compare`, trabalhando com `image.Image`) --
+  veja Uso abaixo.
 
-### Benchmarks
+## Benchmarks
 
 Medido contra datasets reais e não curados -- escolhidos especificamente por
 incluírem variação real de pose/iluminação/oclusão, em vez de fotos de estúdio
@@ -153,7 +150,7 @@ um rosto que não está visível de forma alguma (ex: alguém olhando reto para 
 isso é um problema de detecção de pessoa/cabeça, não de detecção facial, e está fora
 do escopo aqui.
 
-### Licenciamento: por que tão poucos modelos de reconhecimento
+## Licenciamento: por que tão poucos modelos de reconhecimento
 
 Modelos de *detecção* facial (YuNet, CenterFace, RetinaFace, MTCNN, ...) treinam no
 WIDER FACE -- só caixas delimitadoras, sem rótulos de identidade -- então licenciá-los
@@ -184,7 +181,9 @@ advogado, não a este README.
 
 ## Uso
 
-O jeito fácil -- espelha o go-recognizer: aponte para um diretório, tudo mais
+### API fácil
+
+Espelha o go-recognizer: aponte para um diretório, tudo mais
 (biblioteca compartilhada do onnxruntime, modelos de detecção/reconhecimento) é
 baixado automaticamente para lá e só é baixado de novo se estiver faltando:
 
@@ -261,8 +260,10 @@ pela OpenCV para o SFace) depois de `Init`; ajuste para o seu próprio uso, mesm
 do `Tolerance` do go-face/go-recognizer. `SaveDataset`/`LoadDataset` persistem o
 `Dataset` de/para um arquivo JSON.
 
-Controle de baixo nível -- trabalhe com `image.Image` diretamente, escolha seu
-próprio detector/reconhecedor (ex: `centerface` em vez de `yunet`), ou rode
+### API de baixo nível
+
+Trabalhe com `image.Image` diretamente, escolha seu próprio
+detector/reconhecedor (ex: `centerface` em vez de `yunet`), ou rode
 detecção/reconhecimento como passos separados:
 
 ```go
@@ -319,8 +320,8 @@ receita exata):
 rec, _ := ghostface.NewRecognizer("/path/to/your/ghostfacenet.onnx")
 ```
 
-Detecção de liveness recebe um retângulo de rosto de qualquer detector (não está
-preso ao `face.FaceDetector`) e classifica como rosto ao vivo ou spoof por
+Detecção de liveness recebe um `face.Face` de qualquer detector (não está presa
+ao `face.FaceDetector` em si) e classifica como rosto ao vivo ou spoof por
 impressão/replay:
 
 ```go
@@ -332,9 +333,14 @@ live, _ := liveness.NewDetector("models/minifasnet_v2.onnx", "models/minifasnet_
 defer live.Close()
 
 faces, _ := det.Detect(img) // qualquer FaceDetector
-result, _ := live.Detect(img, faces[0].Rectangle)
+result, _ := live.Detect(img, faces[0])
 fmt.Println(result.IsLive, result.Score)
 ```
+
+`seetaface6.NewDetector`/`seetaface6.DownloadModel` são uma alternativa
+plug-and-play -- mesma assinatura `Detect(img image.Image, f face.Face)
+(face.Result, error)` (os dois implementam `face.LivenessDetector`), com uma
+troca de precisão/recall diferente (veja Engines acima).
 
 ## Requisitos
 

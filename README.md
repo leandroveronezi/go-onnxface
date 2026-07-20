@@ -18,7 +18,7 @@ prebuilt shared libraries per platform. `Recognizer.DownloadModels` fetches the 
 one for your OS/arch automatically, the same way go-recognizer's `DownloadModels`
 fetches dlib's model files -- no manual ".so path" step.
 
-### Engines
+## Engines
 
 Every model here was picked for having an explicit, commercially-usable license on the
 *published weights* -- not just permissive code wrapping weights trained on a
@@ -44,41 +44,38 @@ Usage below) or directly, same as the detection/recognition engines.
 See [Benchmarks](#benchmarks) below for accuracy/latency numbers per package.
 
 **Status**: early development.
-- ✅ Detection (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
-  each validated against its own real Python reference run (box/landmarks/score
+- ✅ **Detection** (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`)
+  -- each validated against its own real Python reference run (box/landmarks/score
   match within ~1-2px). CenterFace's and RetinaFace's `.onnx` files aren't
   straight upstream downloads (see Development below for why and how they were
   produced) and, unlike YuNet/SFace, aren't hosted by their own upstream project
   either -- `centerface.DownloadModel`/`retinaface.DownloadModel` fetch go-onnxface's
-  own copies instead (see the Development section).
-- ✅ Recognition (`sface.Recognizer`) -- `Align`/`Feature` validated against a
+  own copies instead.
+- ✅ **Recognition** (`sface.Recognizer`) -- `Align`/`Feature` validated against a
   real `cv2.FaceRecognizerSF` run (same-person cosine ~1.0, different-person
   cosine ~0.11-0.12 on both implementations, well below SFace's ~0.363
-  same-person threshold).
-- ✅ Easy API (`Recognizer`, file-path driven, auto-downloading) and low-level
-  API (`Engine`, `Compare`, working with `image.Image`) -- see Usage below.
-- ✅ `arcface` bridge (code only, bring your own weights) -- validated locally
-  against a real InsightFace `buffalo_l` (`w600k_r50.onnx`) run (same-person
-  cosine ~1.0, different-person cosine ~-0.03); not part of CI since it needs
-  weights this repo can't ship.
-- ✅ Liveness/anti-spoof (`liveness.Detector`) -- the crop/preprocessing/ensemble
-  math ported line-by-line from Silent-Face-Anti-Spoofing's own source (not just
-  its README), validated against a real onnxruntime run of the unmodified
-  original models on `testdata/amy.jpg` (a real photo, correctly scored
-  live, ~0.99).
-- ✅ Liveness/anti-spoof (`seetaface6.Detector`) -- the fas_first/fas_second
+  same-person threshold). The `arcface`/`ghostface` bridges (code only, bring
+  your own weights) are validated the same way against their own real
+  reference runs -- `arcface` against InsightFace's `buffalo_l`
+  (`w600k_r50.onnx`, same-person cosine ~1.0, different-person cosine ~-0.03),
+  `ghostface` against a GhostFaceNetV1 run converted from the original Keras
+  weights via tf2onnx (same-person cosine ~1.0, different-person cosine
+  ~0.008, using the exact landmarks the Go side itself produced); neither is
+  part of CI since both need weights this repo can't ship.
+- ✅ **Liveness/anti-spoof** (`liveness.Detector`, `seetaface6.Detector`) --
+  `liveness`'s crop/preprocessing/ensemble math ported line-by-line from
+  Silent-Face-Anti-Spoofing's own source, `seetaface6`'s fas_first/fas_second
   fusion (SSD full-image gate, YCrCb-converted aligned-crop classifier) ported
   line-by-line from SeetaFace6's own C++ source
-  (`FaceAntiSpoofingX/src/seeta/FaceAntiSpoofing.cpp`), validated against a real
-  onnxruntime run on `testdata/amy.jpg` (correctly scored live, ~0.999).
-- ✅ `ghostface` bridge (code only, bring your own weights, same reasoning as
-  `arcface`) -- validated locally against a real GhostFaceNetV1 run, converted
-  from the original Keras weights via tf2onnx (same-person cosine ~1.0,
-  different-person cosine ~0.008, using the exact landmarks the Go side
-  itself produced -- confirms the alignment/preprocessing port is correct,
-  not just "close enough").
+  (`FaceAntiSpoofingX/src/seeta/FaceAntiSpoofing.cpp`) -- both validated
+  against a real onnxruntime run of the unmodified original models on
+  `testdata/amy.jpg` (a real photo, correctly scored live: ~0.99 for
+  `liveness`, ~0.999 for `seetaface6`).
+- ✅ **Easy API** (`Recognizer`, file-path driven, auto-downloading,
+  configurable detector/recognizer/liveness engines) and **low-level API**
+  (`Engine`, `Compare`, working with `image.Image`) -- see Usage below.
 
-### Benchmarks
+## Benchmarks
 
 Measured against uncurated, real-world datasets -- chosen specifically because they
 include real pose/lighting/occlusion variation instead of posed studio photos:
@@ -141,7 +138,7 @@ illumination handling. None of the three -- or any face detector -- can find a f
 that isn't visible at all (e.g. someone looking straight down): that's a person/head
 detection problem, not face detection, and out of scope here.
 
-### Licensing: why so few recognition models
+## Licensing: why so few recognition models
 
 Face *detection* models (YuNet, CenterFace, RetinaFace, MTCNN, ...) train on WIDER
 FACE -- bounding boxes only, no identity labels -- so licensing them commercially is
@@ -170,7 +167,9 @@ in practice -- when unsure, ask a lawyer, not this README.
 
 ## Usage
 
-The easy way -- mirrors go-recognizer: point at a directory, everything else
+### Easy API
+
+Mirrors go-recognizer: point at a directory, everything else
 (onnxruntime shared library, detection/recognition models) is fetched into it
 automatically and only re-downloaded if missing:
 
@@ -246,9 +245,11 @@ threshold) after `Init`; tune it for your own deployment, same idea as
 go-face/go-recognizer's `Tolerance`. `SaveDataset`/`LoadDataset` persist `Dataset`
 to/from a JSON file.
 
-Lower-level control -- work with `image.Image` directly, pick your own
-detector/recognizer (e.g. `centerface` instead of `yunet`), or run detection/
-recognition as separate steps:
+### Low-level API
+
+Work with `image.Image` directly, pick your own detector/recognizer (e.g.
+`centerface` instead of `yunet`), or run detection/recognition as separate
+steps:
 
 ```go
 import (
@@ -302,8 +303,9 @@ just point it at your own conversion (see the package doc for the exact recipe):
 rec, _ := ghostface.NewRecognizer("/path/to/your/ghostfacenet.onnx")
 ```
 
-Liveness detection takes a face rectangle from any detector (it isn't tied to
-`face.FaceDetector`) and classifies it as a live face or a print/replay spoof:
+Liveness detection takes a `face.Face` from any detector (it isn't tied to
+`face.FaceDetector` itself) and classifies it as a live face or a
+print/replay spoof:
 
 ```go
 import "github.com/leandroveronezi/go-onnxface/liveness"
@@ -314,9 +316,14 @@ live, _ := liveness.NewDetector("models/minifasnet_v2.onnx", "models/minifasnet_
 defer live.Close()
 
 faces, _ := det.Detect(img) // any FaceDetector
-result, _ := live.Detect(img, faces[0].Rectangle)
+result, _ := live.Detect(img, faces[0])
 fmt.Println(result.IsLive, result.Score)
 ```
+
+`seetaface6.NewDetector`/`seetaface6.DownloadModel` are a drop-in
+alternative -- same `Detect(img image.Image, f face.Face) (face.Result,
+error)` signature (both implement `face.LivenessDetector`), different
+precision/recall trade-off (see Engines above).
 
 ## Requirements
 
