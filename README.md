@@ -34,7 +34,12 @@ was verified.
 | Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
 | Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
 | Recognition | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depends on your weights* | Same situation as `arcface` (MS1MV2/MS1MV3-trained) -- a bridge, no bundled/downloaded weights. Modern (2023) and competitive with ArcFace, unlike the other DeepFace-wrapped recognition models (VGG-Face/OpenFace/2014-era "DeepFace"), which are old enough that adding them wouldn't beat what's already here. |
-| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. Takes a rectangle from any detector, not tied to the `face.FaceDetector` contract. |
+| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | Default liveness engine. Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. |
+| Liveness | `seetaface6` | [SeetaFace6](https://github.com/seetafaceengine/SeetaFace6) (fas_first + fas_second) | BSD | Catches print/replay spoofs far more aggressively than `liveness`, at the cost of rejecting far more real people -- a real precision/recall trade-off, not a strict improvement. See the go-onnxface-benchmarks README for the numbers this was validated against. |
+
+Both `liveness` and `seetaface6` implement the shared `face.LivenessDetector`
+contract, so they're interchangeable via `Recognizer.Model.Liveness` (see
+Usage below) or directly, same as the detection/recognition engines.
 
 See [Benchmarks](#benchmarks) below for accuracy/latency numbers per package.
 
@@ -61,6 +66,11 @@ See [Benchmarks](#benchmarks) below for accuracy/latency numbers per package.
   its README), validated against a real onnxruntime run of the unmodified
   original models on `testdata/amy.jpg` (a real photo, correctly scored
   live, ~0.99).
+- ✅ Liveness/anti-spoof (`seetaface6.Detector`) -- the fas_first/fas_second
+  fusion (SSD full-image gate, YCrCb-converted aligned-crop classifier) ported
+  line-by-line from SeetaFace6's own C++ source
+  (`FaceAntiSpoofingX/src/seeta/FaceAntiSpoofing.cpp`), validated against a real
+  onnxruntime run on `testdata/amy.jpg` (correctly scored live, ~0.999).
 - ✅ `ghostface` bridge (code only, bring your own weights, same reasoning as
   `arcface`) -- validated locally against a real GhostFaceNetV1 run, converted
   from the original Keras weights via tf2onnx (same-person cosine ~1.0,
@@ -198,8 +208,40 @@ API contract and may change. Any other error (I/O, image decoding, etc.)
 is wrapped with `%w`, so `errors.Unwrap`/`errors.As` still reach the
 underlying cause.
 
-`Recognizer` always uses `yunet`+`sface` internally (`DownloadModels`/`Init`'s
-defaults). `Recognizer.Tolerance` defaults to 1.128 (OpenCV's suggested SFace L2
+By default `Recognizer` uses `yunet`+`sface` and no liveness engine --
+set `Model` before `Init` to pick different ones (any combination of the
+Engines table above), plus any per-engine file/config overrides:
+
+```go
+rec := &onnxface.Recognizer{}
+rec.Model.Detector = onnxface.DetectorRetinaFace  // more accurate, slower -- see Benchmarks
+rec.Model.Liveness = onnxface.LivenessSeetaFace6  // adds CheckLiveness below
+
+if err := rec.DownloadModels("models"); err != nil { // fetches only what Model selects
+    // ...
+}
+if err := rec.Init("models"); err != nil {
+    // ...
+}
+defer rec.Close()
+
+liveness, err := rec.CheckLiveness("photo.jpg")
+switch {
+case errors.Is(err, onnxface.ErrNoLivenessEngine):
+    // Model.Liveness was left at the default (LivenessNone)
+case err != nil:
+    // photo.jpg doesn't have exactly one face, or something else went wrong
+default:
+    fmt.Println(liveness.IsLive, liveness.Score)
+}
+```
+
+`RecognizerArcFace`/`RecognizerGhostFace` ship no weights (see Licensing
+above), so `Model.RecognizerFile` and, for `arcface`, `Model.ArcFace` are
+required -- `Init` returns a clear error otherwise, and `DownloadModels`
+is a no-op for either.
+
+`Recognizer.Tolerance` defaults to 1.128 (OpenCV's suggested SFace L2
 threshold) after `Init`; tune it for your own deployment, same idea as
 go-face/go-recognizer's `Tolerance`. `SaveDataset`/`LoadDataset` persist `Dataset`
 to/from a JSON file.

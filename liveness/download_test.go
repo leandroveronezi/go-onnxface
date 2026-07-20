@@ -54,7 +54,7 @@ func TestDownloadModel(t *testing.T) {
 	}
 	defer det.Close()
 
-	if _, err := det.Detect(img, faces[0].Rectangle); err != nil {
+	if _, err := det.Detect(img, faces[0]); err != nil {
 		t.Fatalf("Detect with downloaded models: %v", err)
 	}
 

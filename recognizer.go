@@ -11,8 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/leandroveronezi/go-onnxface/sface"
-	"github.com/leandroveronezi/go-onnxface/yunet"
+	"github.com/leandroveronezi/go-onnxface/arcface"
 )
 
 // Sentinel errors for the "expected" failure conditions -- check for
@@ -28,6 +27,9 @@ var (
 	// ErrNoMatch is returned by Identify when the detected face doesn't
 	// match any Dataset entry within Tolerance.
 	ErrNoMatch = errors.New("no match within tolerance")
+	// ErrNoLivenessEngine is returned by CheckLiveness when Init wasn't
+	// given a liveness engine (Config.Liveness == LivenessNone).
+	ErrNoLivenessEngine = errors.New("no liveness engine configured -- set Config.Liveness before Init")
 )
 
 // Data is one known face in a Recognizer's Dataset.
@@ -46,55 +48,78 @@ type Recognition struct {
 }
 
 /*
-ModelFiles selects non-default model file names, both resolved relative
-to the dir passed to Init. Set fields before calling Init; they have no
-effect afterward, since model loading happens inside Init. DownloadModels
-ignores these and always fetches the defaults -- a non-default file is
-yours to provide.
+Config selects which engine Recognizer.Init loads for each role
+(Detector/Recognizer/Liveness), plus any non-default file names or
+per-engine parameters they need. Set fields before calling Init; they
+have no effect afterward, since model loading happens inside Init.
 */
-type ModelFiles struct {
-	// Detector is the YuNet detection model file name. Empty (the
-	// default) uses face_detection_yunet_2023mar.onnx.
-	Detector string
-	// Recognizer is the SFace recognition model file name. Empty (the
-	// default) uses face_recognition_sface_2021dec.onnx.
-	Recognizer string
+type Config struct {
+	// Detector selects the detection engine. Empty (DetectorYuNet) is
+	// the default.
+	Detector DetectorEngine
+	// Recognizer selects the recognition engine. Empty (RecognizerSFace)
+	// is the default.
+	Recognizer RecognizerEngine
+	// Liveness selects the liveness engine, if any. Empty (LivenessNone)
+	// loads none -- CheckLiveness returns ErrNoLivenessEngine.
+	Liveness LivenessEngine
+
+	// DetectorFile overrides the detector's model file name. Empty uses
+	// that engine's own default/DownloadModel file name.
+	DetectorFile string
+	// RecognizerFile overrides the recognizer's model file name. Empty
+	// uses that engine's own default/DownloadModel file name --
+	// RecognizerArcFace/RecognizerGhostFace ship no weights, so this is
+	// required for either of them.
+	RecognizerFile string
+	// LivenessFiles overrides the liveness engine's two model file names
+	// ([0]=primary, [1]=secondary -- both LivenessMiniFAS and
+	// LivenessSeetaFace6 need two files). Empty uses that engine's own
+	// DownloadModel file names.
+	LivenessFiles [2]string
+
+	// ArcFace configures RecognizerArcFace (ignored otherwise) -- see
+	// the arcface package doc for how to fill it in from your own model
+	// file.
+	ArcFace arcface.Config
 }
 
 /*
 Recognizer is the easy, batteries-included face recognition API: after
-Init, work in terms of image file paths -- AddImageToDataset, Identify.
-For lower-level control (custom detectors/recognizers, working with
-image.Image instead of paths, choosing your own comparison metric), see
-Engine, Compare, and the yunet/sface packages instead -- Recognizer uses
-them internally.
+Init, work in terms of image file paths -- AddImageToDataset, Identify,
+CheckLiveness. For lower-level control (working with image.Image instead
+of paths, choosing your own comparison metric), see Engine, Compare, and
+the engine subpackages instead -- Recognizer uses them internally.
 */
 type Recognizer struct {
 	Tolerance float64
-	// Model selects non-default model file names. Set before Init.
-	Model ModelFiles
+	// Model selects the engines and non-default model file names. Set
+	// before Init.
+	Model Config
 	// Dataset holds the known face samples. Mutate it only through
 	// AddImageToDataset or LoadDataset -- Identify always matches
 	// directly against the current Dataset, so, unlike go-face's
 	// classifier, there's no separate "commit" step to remember.
 	Dataset []Data
 
-	det FaceDetector
-	rec FaceRecognizer
-	mu  sync.RWMutex
+	det  FaceDetector
+	rec  FaceRecognizer
+	live LivenessDetector
+	mu   sync.RWMutex
 }
 
 /*
-Init loads the detector/recognizer models from dir (see DownloadModels)
+Init loads the engines selected by Model (detector/recognizer, and
+liveness if Model.Liveness != LivenessNone) from dir (see DownloadModels)
 and, if the ONNX Runtime environment hasn't already been initialized in
 this process -- by a previous Recognizer or by direct low-level use --
 initializes it automatically using the onnxruntime shared library also
 expected in dir.
 
-Set Model before calling Init to choose non-default model file names. Set
-Tolerance after calling Init -- Init resets it to a default (OpenCV's
-suggested SFace L2 same-person threshold, 1.128; tune it for your own
-deployment, same as go-face/go-recognizer's Tolerance).
+Set Model before calling Init to choose engines/non-default model file
+names. Set Tolerance after calling Init -- Init resets it to a default
+(OpenCV's suggested SFace L2 same-person threshold, 1.128; tune it for
+your own deployment, same as go-face/go-recognizer's Tolerance).
 */
 func (r *Recognizer) Init(dir string) error {
 
@@ -114,38 +139,41 @@ func (r *Recognizer) Init(dir string) error {
 		}
 	}
 
-	detectorModel := r.Model.Detector
-	if detectorModel == "" {
-		detectorModel = defaultDetectorModel
-	}
-	recognizerModel := r.Model.Recognizer
-	if recognizerModel == "" {
-		recognizerModel = defaultRecognizerModel
-	}
-
-	det, err := yunet.NewDetector(filepath.Join(dir, detectorModel))
+	det, err := newDetectorEngine(r.Model.Detector, dir, r.Model.DetectorFile)
 	if err != nil {
 		return fmt.Errorf("loading detector model: %w", err)
 	}
 
-	rec, err := sface.NewRecognizer(filepath.Join(dir, recognizerModel))
+	rec, err := newRecognizerEngine(r.Model.Recognizer, dir, r.Model.RecognizerFile, r.Model.ArcFace)
 	if err != nil {
 		det.Close()
 		return fmt.Errorf("loading recognizer model: %w", err)
 	}
 
+	var live LivenessDetector
+	if r.Model.Liveness != LivenessNone {
+		live, err = newLivenessEngine(r.Model.Liveness, dir, r.Model.LivenessFiles)
+		if err != nil {
+			det.Close()
+			rec.Close()
+			return fmt.Errorf("loading liveness model: %w", err)
+		}
+	}
+
 	r.det = det
 	r.rec = rec
+	r.live = live
 
 	return nil
 
 }
 
 /*
-Close releases the resources held by the Recognizer's detector and
-recognizer. It does not tear down the (process-global) ONNX Runtime
-environment -- call CloseEnvironment yourself once you're completely
-done, after closing every Recognizer/Engine in the process.
+Close releases the resources held by the Recognizer's detector,
+recognizer, and liveness engine (if any). It does not tear down the
+(process-global) ONNX Runtime environment -- call CloseEnvironment
+yourself once you're completely done, after closing every
+Recognizer/Engine in the process.
 */
 func (r *Recognizer) Close() {
 
@@ -154,6 +182,9 @@ func (r *Recognizer) Close() {
 	}
 	if r.rec != nil {
 		r.rec.Close()
+	}
+	if r.live != nil {
+		r.live.Close()
 	}
 
 }
@@ -172,9 +203,11 @@ func loadImage(path string) (image.Image, error) {
 
 }
 
-// detectSingle finds exactly one face in the image at path and its
-// embedding, erroring if there isn't exactly one face.
-func (r *Recognizer) detectSingle(path string) (Face, []float32, error) {
+// detectSingleFace finds exactly one face in the image at path, erroring
+// if there isn't exactly one -- the shared core of detectSingle (which
+// also extracts a recognition embedding) and CheckLiveness (which
+// doesn't need one).
+func (r *Recognizer) detectSingleFace(path string) (Face, image.Image, error) {
 
 	img, err := loadImage(path)
 	if err != nil {
@@ -192,13 +225,26 @@ func (r *Recognizer) detectSingle(path string) (Face, []float32, error) {
 		return Face{}, nil, fmt.Errorf("%w in %s", ErrMultipleFaces, path)
 	}
 
-	aligned := r.rec.Align(img, faces[0].Landmarks)
+	return faces[0], img, nil
+
+}
+
+// detectSingle finds exactly one face in the image at path and its
+// embedding, erroring if there isn't exactly one face.
+func (r *Recognizer) detectSingle(path string) (Face, []float32, error) {
+
+	f, img, err := r.detectSingleFace(path)
+	if err != nil {
+		return Face{}, nil, err
+	}
+
+	aligned := r.rec.Align(img, f.Landmarks)
 	feature, err := r.rec.Feature(aligned)
 	if err != nil {
 		return Face{}, nil, fmt.Errorf("extracting feature from %s: %w", path, err)
 	}
 
-	return faces[0], feature, nil
+	return f, feature, nil
 
 }
 
@@ -322,6 +368,34 @@ func (r *Recognizer) IdentifyMultiples(path string) ([]Recognition, error) {
 	}
 
 	return recognitions, nil
+
+}
+
+/*
+CheckLiveness detects the face in the image at path and classifies it as
+a live person or a print/replay spoof, using the engine configured via
+Model.Liveness. Returns ErrNoFace/ErrMultipleFaces if the image doesn't
+have exactly one face, or ErrNoLivenessEngine if Init wasn't given a
+liveness engine (Model.Liveness == LivenessNone) -- check with
+errors.Is.
+*/
+func (r *Recognizer) CheckLiveness(path string) (LivenessResult, error) {
+
+	if r.live == nil {
+		return LivenessResult{}, ErrNoLivenessEngine
+	}
+
+	f, img, err := r.detectSingleFace(path)
+	if err != nil {
+		return LivenessResult{}, err
+	}
+
+	result, err := r.live.Detect(img, f)
+	if err != nil {
+		return LivenessResult{}, fmt.Errorf("checking liveness for %s: %w", path, err)
+	}
+
+	return result, nil
 
 }
 

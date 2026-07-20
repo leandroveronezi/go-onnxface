@@ -28,15 +28,23 @@ dataset de uso restrito a pesquisa (MS1M/CASIA-WebFace/VGGFace2 e similares), qu
 armadilha em que a maioria dos repositórios "licenciados como MIT" de reconhecimento
 facial cai. Veja o link de cada linha para como isso foi verificado.
 
-| Tipo | Pacote | Modelo | Licença | Benchmark (deste repo, veja abaixo) | Notas |
-|------|---------|-------|---------|-----------------------------------|-------|
-| Detecção | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | 70,67% recall (WIDER FACE val) | Padrão. Entrada fixa 640x640 (com letterbox). |
-| Detecção | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | 78,92% recall (WIDER FACE val) | Tamanho de entrada dinâmico (redimensionado para múltiplo de 32, sem distorção de letterbox). |
-| Detecção | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | 76,55% recall (WIDER FACE val) | O mais pesado dos três (~52MB float16 vs ~7,5MB do CenterFace/~230KB do YuNet). Entrada fixa 640x640 (com letterbox). |
-| Reconhecimento | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | 97,11% acurácia (CFP-FP) | Único modelo de reconhecimento encontrado até agora com concessão comercial explícita sobre os pesos -- veja Licenciamento abaixo. |
-| Reconhecimento | `arcface` | qualquer export ONNX da família ArcFace | *depende dos seus pesos* | 99,51% acurácia (CFP-FP, buffalo_l) | Uma ponte, não um modelo: não embute nem baixa nenhum peso. Veja Licenciamento abaixo antes de usar. |
-| Reconhecimento | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depende dos seus pesos* | 96,80% acurácia (CFP-FP) | Mesma situação do `arcface` (treinado em MS1MV2/MS1MV3) -- uma ponte, sem pesos embutidos ou baixados. Moderno (2023) e competitivo com o ArcFace, diferente dos outros modelos de reconhecimento envolvidos pelo DeepFace (VGG-Face/OpenFace/"DeepFace" de 2014), que já são antigos demais para valer a pena adicionar. |
-| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | -- | Detecção de spoof por impressão/replay -- treinado especificamente para essa tarefa, não em um dataset de identidade facial, então nenhuma das ressalvas de licenciamento dos modelos de reconhecimento se aplica. Recebe um retângulo de qualquer detector, não está preso ao contrato `face.FaceDetector`. |
+| Tipo | Pacote | Modelo | Licença | Notas |
+|------|---------|-------|---------|-------|
+| Detecção | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | Padrão. Entrada fixa 640x640 (com letterbox). |
+| Detecção | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | Tamanho de entrada dinâmico (redimensionado para múltiplo de 32, sem distorção de letterbox). |
+| Detecção | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | O mais pesado dos três (~52MB float16 vs ~7,5MB do CenterFace/~230KB do YuNet). Entrada fixa 640x640 (com letterbox). |
+| Reconhecimento | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Único modelo de reconhecimento encontrado até agora com concessão comercial explícita sobre os pesos -- veja Licenciamento abaixo. |
+| Reconhecimento | `arcface` | qualquer export ONNX da família ArcFace | *depende dos seus pesos* | Uma ponte, não um modelo: não embute nem baixa nenhum peso. Veja Licenciamento abaixo antes de usar. |
+| Reconhecimento | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depende dos seus pesos* | Mesma situação do `arcface` (treinado em MS1MV2/MS1MV3) -- uma ponte, sem pesos embutidos ou baixados. Moderno (2023) e competitivo com o ArcFace, diferente dos outros modelos de reconhecimento envolvidos pelo DeepFace (VGG-Face/OpenFace/"DeepFace" de 2014), que já são antigos demais para valer a pena adicionar. |
+| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | Engine de liveness padrão. Detecção de spoof por impressão/replay -- treinado especificamente para essa tarefa, não em um dataset de identidade facial, então nenhuma das ressalvas de licenciamento dos modelos de reconhecimento se aplica. |
+| Liveness | `seetaface6` | [SeetaFace6](https://github.com/seetafaceengine/SeetaFace6) (fas_first + fas_second) | BSD | Pega spoof de impressão/replay de forma bem mais agressiva que o `liveness`, ao custo de rejeitar muito mais gente real de verdade -- uma troca real de precisão/recall, não uma melhoria estrita. Veja o README do go-onnxface-benchmarks pros números que validaram isso. |
+
+Tanto `liveness` quanto `seetaface6` implementam o contrato compartilhado
+`face.LivenessDetector`, então são intercambiáveis via
+`Recognizer.Model.Liveness` (veja Uso abaixo) ou diretamente, igual aos
+engines de detecção/reconhecimento.
+
+Veja [Benchmarks](#benchmarks) abaixo pros números de acurácia/latência de cada pacote.
 
 **Status**: em desenvolvimento inicial.
 - ✅ Detecção (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
@@ -63,6 +71,12 @@ facial cai. Veja o link de cada linha para como isso foi verificado.
   Silent-Face-Anti-Spoofing (não só do README), validada contra uma execução real
   via onnxruntime dos modelos originais sem modificação em `testdata/amy.jpg` (uma
   foto real, corretamente classificada como ao vivo, ~0,99).
+- ✅ Liveness/anti-spoof (`seetaface6.Detector`) -- a fusão fas_first/fas_second
+  (gate SSD de imagem inteira, classificador de recorte alinhado convertido pra
+  YCrCb) portada linha a linha do código-fonte C++ do próprio SeetaFace6
+  (`FaceAntiSpoofingX/src/seeta/FaceAntiSpoofing.cpp`), validada contra uma
+  execução real via onnxruntime em `testdata/amy.jpg` (corretamente classificada
+  como ao vivo, ~0,999).
 - ✅ Ponte `ghostface` (só código, traga seus próprios pesos, mesmo raciocínio do
   `arcface`) -- validada localmente contra uma execução real do GhostFaceNetV1,
   convertido dos pesos originais em Keras via tf2onnx (cosine ~1,0 mesma pessoa,
@@ -208,8 +222,41 @@ parte do contrato da API e pode mudar. Qualquer outro erro (I/O,
 decodificação de imagem, etc.) vem envolvido com `%w`, então
 `errors.Unwrap`/`errors.As` ainda alcançam a causa original.
 
-`Recognizer` sempre usa `yunet`+`sface` internamente (padrões de
-`DownloadModels`/`Init`). `Recognizer.Tolerance` tem padrão 1,128 (limiar L2 sugerido
+Por padrão o `Recognizer` usa `yunet`+`sface` e nenhum engine de liveness
+-- configure `Model` antes de `Init` pra escolher outros (qualquer
+combinação da tabela de Engines acima), mais os overrides de
+arquivo/config específicos de cada engine:
+
+```go
+rec := &onnxface.Recognizer{}
+rec.Model.Detector = onnxface.DetectorRetinaFace  // mais preciso, mais lento -- veja Benchmarks
+rec.Model.Liveness = onnxface.LivenessSeetaFace6  // adiciona o CheckLiveness abaixo
+
+if err := rec.DownloadModels("models"); err != nil { // baixa só o que Model seleciona
+    // ...
+}
+if err := rec.Init("models"); err != nil {
+    // ...
+}
+defer rec.Close()
+
+liveness, err := rec.CheckLiveness("photo.jpg")
+switch {
+case errors.Is(err, onnxface.ErrNoLivenessEngine):
+    // Model.Liveness ficou no padrão (LivenessNone)
+case err != nil:
+    // photo.jpg não tem exatamente um rosto, ou outro erro qualquer
+default:
+    fmt.Println(liveness.IsLive, liveness.Score)
+}
+```
+
+`RecognizerArcFace`/`RecognizerGhostFace` não têm pesos embutidos (veja
+Licenciamento acima), então `Model.RecognizerFile` e, no caso do
+`arcface`, `Model.ArcFace` são obrigatórios -- `Init` retorna um erro
+claro se faltar, e `DownloadModels` vira no-op pros dois.
+
+`Recognizer.Tolerance` tem padrão 1,128 (limiar L2 sugerido
 pela OpenCV para o SFace) depois de `Init`; ajuste para o seu próprio uso, mesma ideia
 do `Tolerance` do go-face/go-recognizer. `SaveDataset`/`LoadDataset` persistem o
 `Dataset` de/para um arquivo JSON.

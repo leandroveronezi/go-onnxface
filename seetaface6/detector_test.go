@@ -1,21 +1,20 @@
-package liveness_test
+package seetaface6_test
 
 import (
 	"image"
 	"image/jpeg"
-	"math"
 	"os"
 	"testing"
 
 	"github.com/leandroveronezi/go-onnxface/face"
-	"github.com/leandroveronezi/go-onnxface/liveness"
+	"github.com/leandroveronezi/go-onnxface/seetaface6"
 	"github.com/leandroveronezi/go-onnxface/yunet"
 )
 
 const (
-	yunetModelPath = "../models/face_detection_yunet_2023mar.onnx"
-	v2ModelPath    = "../models/minifasnet_v2.onnx"
-	v1seModelPath  = "../models/minifasnet_v1se.onnx"
+	yunetModelPath     = "../models/face_detection_yunet_2023mar.onnx"
+	fasFirstModelPath  = "../models/fas_first.onnx"
+	fasSecondModelPath = "../models/fas_second.onnx"
 )
 
 func ortSharedLibraryPath(t *testing.T) string {
@@ -60,18 +59,12 @@ func loadTestImage(t *testing.T, path string) image.Image {
 }
 
 /*
-TestDetectorMatchesPythonReference is a regression test pinning the Go
-implementation against a real onnxruntime run of
-Silent-Face-Anti-Spoofing's own ensemble algorithm (CropImage._get_new_box,
-its deliberately-not-normalized ToTensor, softmax + sum + argmax/len
-decision, all ported line-by-line) on testdata/amy.jpg using the same
-box yunet.Detector itself produces: opencv-python's onnxruntime reported
-label=1 (real), score=0.9947. This catches the exact class of
-preprocessing-mismatch bug (wrong crop box, wrong normalization, wrong
-ensemble math) that silently produces a plausible-looking but wrong
-result instead of an error.
+TestDetectorRealPhoto is a smoke test against testdata/amy.jpg (a real
+photo, no print/replay spoof involved) -- confirms the fas_second
+full-image gate doesn't fire and fas_first's fused decision lands on
+"live", the same way liveness.Detector's own equivalent test does.
 */
-func TestDetectorMatchesPythonReference(t *testing.T) {
+func TestDetectorRealPhoto(t *testing.T) {
 	initForTest(t)
 
 	yn, err := yunet.NewDetector(yunetModelPath)
@@ -90,7 +83,7 @@ func TestDetectorMatchesPythonReference(t *testing.T) {
 		t.Fatalf("got %d faces, want 1", len(faces))
 	}
 
-	det, err := liveness.NewDetector(v2ModelPath, v1seModelPath)
+	det, err := seetaface6.NewDetector(fasFirstModelPath, fasSecondModelPath)
 	if err != nil {
 		t.Fatalf("NewDetector: %v", err)
 	}
@@ -104,7 +97,7 @@ func TestDetectorMatchesPythonReference(t *testing.T) {
 	if !result.IsLive {
 		t.Errorf("IsLive = false, want true (testdata/amy.jpg is a real photo)")
 	}
-	if math.Abs(result.Score-0.9947) > 0.02 {
-		t.Errorf("Score = %v, want ~0.9947 (within 0.02)", result.Score)
+	if result.Score < 0.8 {
+		t.Errorf("Score = %v, want >= 0.8 (fuseThreshold)", result.Score)
 	}
 }

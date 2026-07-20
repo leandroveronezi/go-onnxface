@@ -17,6 +17,11 @@ type (
 	FaceDetector   = face.FaceDetector
 	FaceRecognizer = face.FaceRecognizer
 	DistanceType   = face.DistanceType
+	// LivenessDetector and LivenessResult are re-exported from face too
+	// -- named LivenessResult (not just Result) here because Result is
+	// already taken by Engine.Recognize's Face+Feature pairing.
+	LivenessDetector = face.LivenessDetector
+	LivenessResult   = face.Result
 )
 
 const (

@@ -55,6 +55,33 @@ type FaceRecognizer interface {
 	Close()
 }
 
+// Result is the outcome of a liveness check.
+type Result struct {
+	// IsLive is true when the face is judged to be a live person rather
+	// than a print/replay spoof.
+	IsLive bool
+	// Score is the winning class's probability, in [0,1]. Not a
+	// calibrated confidence beyond "higher means more certain of
+	// IsLive's value" -- and not comparable across different
+	// LivenessDetector implementations.
+	Score float64
+}
+
+/*
+LivenessDetector classifies a detected face as a live person or a
+print/replay spoof. liveness.Detector (MiniFASNetV2/V1SE) and
+seetaface6.Detector both implement this. The interface exists so the
+easy Recognizer API can swap between them (see onnxface.LivenessEngine)
+without changing the calling code -- unlike FaceDetector/FaceRecognizer,
+which every implementation needs the full Face for (some use Rectangle,
+some use Landmarks), so Detect takes the whole struct rather than
+picking one field for it.
+*/
+type LivenessDetector interface {
+	Detect(img image.Image, f Face) (Result, error)
+	Close()
+}
+
 // DistanceType selects the metric Match uses to compare two embeddings.
 type DistanceType int
 

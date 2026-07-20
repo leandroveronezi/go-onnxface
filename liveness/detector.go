@@ -6,9 +6,10 @@ not a face-identity dataset, so none of the licensing concerns that
 apply to recognition models apply here).
 
 Unlike the face.FaceDetector/FaceRecognizer engines, Detector isn't tied
-to that contract: it takes a face rectangle from any detector (or drawn
-by hand) and classifies whether that region is a live face or a
-print/screen spoof, independent of who found the rectangle.
+to that contract: it takes a face.Face from any detector (or built by
+hand) and classifies whether that region is a live face or a
+print/screen spoof, independent of who found it. It implements
+face.LivenessDetector, the same contract seetaface6.Detector does.
 */
 package liveness
 
@@ -19,6 +20,7 @@ import (
 
 	"golang.org/x/image/draw"
 
+	"github.com/leandroveronezi/go-onnxface/face"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
@@ -36,23 +38,17 @@ type model struct {
 	output  *ort.Tensor[float32]
 }
 
-// Result is the outcome of a liveness check.
-type Result struct {
-	// IsLive is true when the face is judged to be a live person rather
-	// than a print/replay spoof.
-	IsLive bool
-	// Score is the winning class's ensemble-averaged probability, in
-	// [0,1]. Not a calibrated confidence beyond "higher means more
-	// certain of IsLive's value" -- matches Silent-Face-Anti-Spoofing's
-	// own test.py (prediction[label] divided by the number of models in
-	// the ensemble).
-	Score float64
-}
+// Result is the outcome of a liveness check -- an alias for face.Result,
+// the contract shared with seetaface6.Detector (see face.LivenessDetector).
+type Result = face.Result
 
-// Detector runs the MiniFASNetV2/MiniFASNetV1SE ensemble.
+// Detector runs the MiniFASNetV2/MiniFASNetV1SE ensemble. Implements
+// face.LivenessDetector.
 type Detector struct {
 	models []*model
 }
+
+var _ face.LivenessDetector = (*Detector)(nil)
 
 /*
 NewDetector loads the two ensemble models (v2Path: the "2.7_80x80_..."
@@ -134,10 +130,10 @@ func (d *Detector) Close() {
 }
 
 /*
-Detect classifies the face at bbox (a rectangle from any detector -- see
-the package doc) in img as live or a print/replay spoof.
+Detect classifies f (a face from any detector -- see the package doc)
+in img as live or a print/replay spoof. Only f.Rectangle is used.
 */
-func (d *Detector) Detect(img image.Image, bbox image.Rectangle) (Result, error) {
+func (d *Detector) Detect(img image.Image, f face.Face) (Result, error) {
 
 	bounds := img.Bounds()
 	srcW, srcH := bounds.Dx(), bounds.Dy()
@@ -145,7 +141,7 @@ func (d *Detector) Detect(img image.Image, bbox image.Rectangle) (Result, error)
 	var sum [3]float64
 	for _, m := range d.models {
 
-		cropRect := cropBox(srcW, srcH, bbox, m.scale)
+		cropRect := cropBox(srcW, srcH, f.Rectangle, m.scale)
 		patch := cropAndResize(img, bounds.Min, cropRect)
 
 		data := m.input.GetData()
