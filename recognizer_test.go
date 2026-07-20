@@ -1,6 +1,9 @@
 package onnxface_test
 
 import (
+	"errors"
+	"image"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,16 +30,16 @@ func newTestRecognizer(t *testing.T) *onnxface.Recognizer {
 	return rec
 }
 
-func TestRecognizerClassify(t *testing.T) {
+func TestRecognizerIdentify(t *testing.T) {
 	rec := newTestRecognizer(t)
 
 	if err := rec.AddImageToDataset("testdata/amy.jpg", "Amy"); err != nil {
 		t.Fatalf("AddImageToDataset: %v", err)
 	}
 
-	result, err := rec.Classify("testdata/amy.jpg")
+	result, err := rec.Identify("testdata/amy.jpg")
 	if err != nil {
-		t.Fatalf("Classify(amy): %v", err)
+		t.Fatalf("Identify(amy): %v", err)
 	}
 	if result.Id != "Amy" {
 		t.Errorf("Id = %q, want Amy", result.Id)
@@ -48,21 +51,57 @@ func TestRecognizerClassify(t *testing.T) {
 		t.Errorf("Confidence = %v, want ~1.0", result.Confidence)
 	}
 
-	if _, err := rec.Classify("testdata/bernadette.jpg"); err == nil {
-		t.Error("Classify(bernadette) succeeded, want an error (no Dataset match within Tolerance)")
+	if _, err := rec.Identify("testdata/bernadette.jpg"); !errors.Is(err, onnxface.ErrNoMatch) {
+		t.Errorf("Identify(bernadette): err = %v, want ErrNoMatch", err)
 	}
 }
 
-func TestRecognizerClassifyMultiples(t *testing.T) {
+func TestRecognizerAddImageToDatasetNoFace(t *testing.T) {
+	rec := newTestRecognizer(t)
+
+	blankPath := filepath.Join(t.TempDir(), "blank.jpg")
+	writeBlankJPEG(t, blankPath)
+
+	if err := rec.AddImageToDataset(blankPath, "NoOne"); !errors.Is(err, onnxface.ErrNoFace) {
+		t.Fatalf("AddImageToDataset(blank): err = %v, want ErrNoFace", err)
+	}
+}
+
+func TestRecognizerAddImageToDatasetRejectsMultipleFaces(t *testing.T) {
+	rec := newTestRecognizer(t)
+
+	if err := rec.AddImageToDataset("examples/fotos/elenco3.jpg", "Group"); !errors.Is(err, onnxface.ErrMultipleFaces) {
+		t.Fatalf("AddImageToDataset(elenco3): err = %v, want ErrMultipleFaces", err)
+	}
+}
+
+// writeBlankJPEG writes a solid-color JPEG with no detectable face to path.
+func writeBlankJPEG(t *testing.T, path string) {
+	t.Helper()
+
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create(%s): %v", path, err)
+	}
+	defer f.Close()
+
+	if err := jpeg.Encode(f, img, nil); err != nil {
+		t.Fatalf("jpeg.Encode: %v", err)
+	}
+}
+
+func TestRecognizerIdentifyMultiples(t *testing.T) {
 	rec := newTestRecognizer(t)
 
 	if err := rec.AddImageToDataset("testdata/amy.jpg", "Amy"); err != nil {
 		t.Fatalf("AddImageToDataset: %v", err)
 	}
 
-	results, err := rec.ClassifyMultiples("testdata/amy.jpg")
+	results, err := rec.IdentifyMultiples("testdata/amy.jpg")
 	if err != nil {
-		t.Fatalf("ClassifyMultiples: %v", err)
+		t.Fatalf("IdentifyMultiples: %v", err)
 	}
 	if len(results) != 1 {
 		t.Fatalf("got %d results, want 1", len(results))
@@ -71,9 +110,9 @@ func TestRecognizerClassifyMultiples(t *testing.T) {
 		t.Errorf("Id = %q, want Amy", results[0].Id)
 	}
 
-	results, err = rec.ClassifyMultiples("testdata/bernadette.jpg")
+	results, err = rec.IdentifyMultiples("testdata/bernadette.jpg")
 	if err != nil {
-		t.Fatalf("ClassifyMultiples(bernadette): %v", err)
+		t.Fatalf("IdentifyMultiples(bernadette): %v", err)
 	}
 	if len(results) != 0 {
 		t.Errorf("got %d results, want 0 (no Dataset match within Tolerance)", len(results))
@@ -120,9 +159,9 @@ func TestRecognizerSaveLoadDataset(t *testing.T) {
 		t.Fatalf("Dataset after LoadDataset = %+v, want one entry with Id Amy", loaded.Dataset)
 	}
 
-	result, err := loaded.Classify("testdata/amy.jpg")
+	result, err := loaded.Identify("testdata/amy.jpg")
 	if err != nil {
-		t.Fatalf("Classify after LoadDataset: %v", err)
+		t.Fatalf("Identify after LoadDataset: %v", err)
 	}
 	if result.Id != "Amy" {
 		t.Errorf("Id = %q, want Amy", result.Id)

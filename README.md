@@ -26,15 +26,17 @@ research-only dataset (MS1M/CASIA-WebFace/VGGFace2 and similar), which is the tr
 most "MIT-licensed" face recognition repos fall into. See each row's link for how it
 was verified.
 
-| Kind | Package | Model | License | Benchmark (this repo, see below) | Notes |
-|------|---------|-------|---------|-----------------------------------|-------|
-| Detection | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | 70.67% recall (WIDER FACE val) | Default. Fixed 640x640 input (letterboxed). |
-| Detection | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | 78.92% recall (WIDER FACE val) | Dynamic input size (resized to a multiple of 32, no letterbox distortion). |
-| Detection | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | 76.55% recall (WIDER FACE val) | Heaviest of the three (~52MB float16 vs CenterFace's ~7.5MB/YuNet's ~230KB). Fixed 640x640 input (letterboxed). |
-| Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | 97.11% accuracy (CFP-FP) | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
-| Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | 99.51% accuracy (CFP-FP, buffalo_l) | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
-| Recognition | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depends on your weights* | 96.80% accuracy (CFP-FP) | Same situation as `arcface` (MS1MV2/MS1MV3-trained) -- a bridge, no bundled/downloaded weights. Modern (2023) and competitive with ArcFace, unlike the other DeepFace-wrapped recognition models (VGG-Face/OpenFace/2014-era "DeepFace"), which are old enough that adding them wouldn't beat what's already here. |
-| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | -- | Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. Takes a rectangle from any detector, not tied to the `face.FaceDetector` contract. |
+| Kind | Package | Model | License | Notes |
+|------|---------|-------|---------|-------|
+| Detection | `yunet` | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) | MIT | Default. Fixed 640x640 input (letterboxed). |
+| Detection | `centerface` | [CenterFace](https://github.com/Star-Clouds/CenterFace) | MIT | Dynamic input size (resized to a multiple of 32, no letterbox distortion). |
+| Detection | `retinaface` | [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) (resnet50) | MIT | Heaviest of the three (~52MB float16 vs CenterFace's ~7.5MB/YuNet's ~230KB). Fixed 640x640 input (letterboxed). |
+| Recognition | `sface` | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) | Apache-2.0 | Only recognition model found so far with an explicit commercial grant on the weights -- see Licensing below. |
+| Recognition | `arcface` | any ArcFace-family ONNX export | *depends on your weights* | A bridge, not a model: ships no weights, downloads none. See Licensing below before using it. |
+| Recognition | `ghostface` | [GhostFaceNetV1](https://github.com/HamadYA/GhostFaceNets) | *depends on your weights* | Same situation as `arcface` (MS1MV2/MS1MV3-trained) -- a bridge, no bundled/downloaded weights. Modern (2023) and competitive with ArcFace, unlike the other DeepFace-wrapped recognition models (VGG-Face/OpenFace/2014-era "DeepFace"), which are old enough that adding them wouldn't beat what's already here. |
+| Liveness | `liveness` | [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) (MiniFASNetV2 + MiniFASNetV1SE) | Apache-2.0 | Print/replay spoof detection -- trained for this task specifically, not a face-identity dataset, so none of the recognition-model licensing caveats apply. Takes a rectangle from any detector, not tied to the `face.FaceDetector` contract. |
+
+See [Benchmarks](#benchmarks) below for accuracy/latency numbers per package.
 
 **Status**: early development.
 - ✅ Detection (`yunet.Detector`, `centerface.Detector`, `retinaface.Detector`) --
@@ -177,12 +179,24 @@ defer rec.Close()
 
 rec.AddImageToDataset("amy.jpg", "Amy")
 
-result, err := rec.Classify("photo.jpg")
-if err != nil {
-    // no face, or no match within rec.Tolerance
+result, err := rec.Identify("photo.jpg")
+switch {
+case errors.Is(err, onnxface.ErrNoFace), errors.Is(err, onnxface.ErrMultipleFaces):
+    // photo.jpg doesn't have exactly one face
+case errors.Is(err, onnxface.ErrNoMatch):
+    // no Dataset entry within rec.Tolerance
+case err != nil:
+    // something else went wrong (I/O, decode, ...)
 }
 fmt.Println(result.Id, result.Distance, result.Confidence)
 ```
+
+`AddImageToDataset`/`RecognizeSingle`/`Identify` return these sentinel
+errors for their "expected" failure conditions -- check with `errors.Is`
+instead of matching on the error message text, which isn't part of the
+API contract and may change. Any other error (I/O, image decoding, etc.)
+is wrapped with `%w`, so `errors.Unwrap`/`errors.As` still reach the
+underlying cause.
 
 `Recognizer` always uses `yunet`+`sface` internally (`DownloadModels`/`Init`'s
 defaults). `Recognizer.Tolerance` defaults to 1.128 (OpenCV's suggested SFace L2

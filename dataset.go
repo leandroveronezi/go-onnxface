@@ -26,7 +26,7 @@ func (r *Recognizer) SaveDataset(path string) error {
 
 /*
 LoadDataset loads entries from a JSON file saved by SaveDataset, appending
-them to the current Dataset -- it doesn't replace it. Classify sees the
+them to the current Dataset -- it doesn't replace it. Identify sees the
 loaded entries immediately, with no separate step needed.
 */
 func (r *Recognizer) LoadDataset(path string) error {

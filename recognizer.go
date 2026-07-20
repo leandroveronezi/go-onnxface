@@ -1,6 +1,7 @@
 package onnxface
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -12,6 +13,21 @@ import (
 
 	"github.com/leandroveronezi/go-onnxface/sface"
 	"github.com/leandroveronezi/go-onnxface/yunet"
+)
+
+// Sentinel errors for the "expected" failure conditions -- check for
+// these with errors.Is instead of matching on the error message text,
+// which isn't part of the API contract and may change.
+var (
+	// ErrNoFace is returned when an image has no detected face, where an
+	// operation requires exactly one.
+	ErrNoFace = errors.New("no face found")
+	// ErrMultipleFaces is returned when an image has more than one
+	// detected face, where an operation requires exactly one.
+	ErrMultipleFaces = errors.New("more than one face found")
+	// ErrNoMatch is returned by Identify when the detected face doesn't
+	// match any Dataset entry within Tolerance.
+	ErrNoMatch = errors.New("no match within tolerance")
 )
 
 // Data is one known face in a Recognizer's Dataset.
@@ -47,7 +63,7 @@ type ModelFiles struct {
 
 /*
 Recognizer is the easy, batteries-included face recognition API: after
-Init, work in terms of image file paths -- AddImageToDataset, Classify.
+Init, work in terms of image file paths -- AddImageToDataset, Identify.
 For lower-level control (custom detectors/recognizers, working with
 image.Image instead of paths, choosing your own comparison metric), see
 Engine, Compare, and the yunet/sface packages instead -- Recognizer uses
@@ -58,7 +74,7 @@ type Recognizer struct {
 	// Model selects non-default model file names. Set before Init.
 	Model ModelFiles
 	// Dataset holds the known face samples. Mutate it only through
-	// AddImageToDataset or LoadDataset -- Classify always matches
+	// AddImageToDataset or LoadDataset -- Identify always matches
 	// directly against the current Dataset, so, unlike go-face's
 	// classifier, there's no separate "commit" step to remember.
 	Dataset []Data
@@ -170,10 +186,10 @@ func (r *Recognizer) detectSingle(path string) (Face, []float32, error) {
 		return Face{}, nil, fmt.Errorf("detecting faces in %s: %w", path, err)
 	}
 	if len(faces) == 0 {
-		return Face{}, nil, fmt.Errorf("no face found in %s", path)
+		return Face{}, nil, fmt.Errorf("%w in %s", ErrNoFace, path)
 	}
 	if len(faces) > 1 {
-		return Face{}, nil, fmt.Errorf("more than one face found in %s", path)
+		return Face{}, nil, fmt.Errorf("%w in %s", ErrMultipleFaces, path)
 	}
 
 	aligned := r.rec.Align(img, faces[0].Landmarks)
@@ -187,7 +203,8 @@ func (r *Recognizer) detectSingle(path string) (Face, []float32, error) {
 }
 
 // AddImageToDataset adds a sample image to the Dataset. The image must
-// contain exactly one face.
+// contain exactly one face -- returns ErrNoFace or ErrMultipleFaces
+// otherwise (check with errors.Is).
 func (r *Recognizer) AddImageToDataset(path, id string) error {
 
 	_, feature, err := r.detectSingle(path)
@@ -204,8 +221,9 @@ func (r *Recognizer) AddImageToDataset(path, id string) error {
 }
 
 /*
-RecognizeSingle detects the face in the image at path, returning an error
-unless there's exactly one.
+RecognizeSingle detects the face in the image at path, returning
+ErrNoFace or ErrMultipleFaces unless there's exactly one (check with
+errors.Is).
 */
 func (r *Recognizer) RecognizeSingle(path string) (Face, error) {
 
@@ -216,7 +234,7 @@ func (r *Recognizer) RecognizeSingle(path string) (Face, error) {
 
 /*
 RecognizeMultiples returns every face detected in the image at path, with
-no identity matching against Dataset -- see Classify for that.
+no identity matching against Dataset -- see Identify for that.
 */
 func (r *Recognizer) RecognizeMultiples(path string) ([]Face, error) {
 
@@ -235,11 +253,12 @@ func (r *Recognizer) RecognizeMultiples(path string) ([]Face, error) {
 }
 
 /*
-Classify detects the face in the image at path and matches it against
-Dataset, returning an error if there isn't exactly one face or if no
-Dataset entry is within Tolerance.
+Identify detects the face in the image at path and matches it against
+Dataset. Returns ErrNoFace/ErrMultipleFaces if there isn't exactly one
+face, or ErrNoMatch if no Dataset entry is within Tolerance -- check
+with errors.Is.
 */
-func (r *Recognizer) Classify(path string) (Recognition, error) {
+func (r *Recognizer) Identify(path string) (Recognition, error) {
 
 	f, feature, err := r.detectSingle(path)
 	if err != nil {
@@ -248,7 +267,7 @@ func (r *Recognizer) Classify(path string) (Recognition, error) {
 
 	data, distance, ok := r.bestMatch(feature)
 	if !ok {
-		return Recognition{}, fmt.Errorf("no match within tolerance for %s", path)
+		return Recognition{}, fmt.Errorf("%w for %s", ErrNoMatch, path)
 	}
 
 	return Recognition{
@@ -262,11 +281,11 @@ func (r *Recognizer) Classify(path string) (Recognition, error) {
 }
 
 /*
-ClassifyMultiples detects every face in the image at path and matches
+IdentifyMultiples detects every face in the image at path and matches
 each against Dataset, skipping faces with no Dataset entry within
 Tolerance. An empty slice (not an error) is returned if no face matched.
 */
-func (r *Recognizer) ClassifyMultiples(path string) ([]Recognition, error) {
+func (r *Recognizer) IdentifyMultiples(path string) ([]Recognition, error) {
 
 	faces, err := r.RecognizeMultiples(path)
 	if err != nil {

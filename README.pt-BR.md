@@ -189,12 +189,24 @@ defer rec.Close()
 
 rec.AddImageToDataset("amy.jpg", "Amy")
 
-result, err := rec.Classify("photo.jpg")
-if err != nil {
-    // sem rosto, ou sem correspondência dentro de rec.Tolerance
+result, err := rec.Identify("photo.jpg")
+switch {
+case errors.Is(err, onnxface.ErrNoFace), errors.Is(err, onnxface.ErrMultipleFaces):
+    // photo.jpg não tem exatamente um rosto
+case errors.Is(err, onnxface.ErrNoMatch):
+    // nenhuma entrada do Dataset dentro de rec.Tolerance
+case err != nil:
+    // outro erro qualquer (I/O, decodificação, ...)
 }
 fmt.Println(result.Id, result.Distance, result.Confidence)
 ```
+
+`AddImageToDataset`/`RecognizeSingle`/`Identify` retornam esses erros
+sentinela para as condições de falha "esperadas" -- verifique com
+`errors.Is` em vez de comparar o texto da mensagem de erro, que não faz
+parte do contrato da API e pode mudar. Qualquer outro erro (I/O,
+decodificação de imagem, etc.) vem envolvido com `%w`, então
+`errors.Unwrap`/`errors.As` ainda alcançam a causa original.
 
 `Recognizer` sempre usa `yunet`+`sface` internamente (padrões de
 `DownloadModels`/`Init`). `Recognizer.Tolerance` tem padrão 1,128 (limiar L2 sugerido

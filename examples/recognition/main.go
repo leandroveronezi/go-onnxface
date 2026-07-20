@@ -13,6 +13,9 @@ const fotosDir = "../fotos"
 const modelsDir = "../../models"
 
 func addFile(rec *onnxface.Recognizer, path, id string) {
+	// AddImageToDataset returns onnxface.ErrNoFace/ErrMultipleFaces for
+	// images that don't have exactly one face -- check with errors.Is if
+	// you need to tell those apart; here we just log whatever comes back.
 	if err := rec.AddImageToDataset(path, id); err != nil {
 		fmt.Println(err)
 	}
@@ -43,7 +46,7 @@ func main() {
 	addFile(rec, filepath.Join(fotosDir, "sheldon.jpg"), "Sheldon")
 	addFile(rec, filepath.Join(fotosDir, "leonard.jpg"), "Leonard")
 
-	results, err := rec.ClassifyMultiples(filepath.Join(fotosDir, "elenco3.jpg"))
+	results, err := rec.IdentifyMultiples(filepath.Join(fotosDir, "elenco3.jpg"))
 	if err != nil {
 		fmt.Println(err)
 		return
