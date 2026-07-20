@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -13,10 +14,11 @@ const fotosDir = "../fotos"
 const modelsDir = "../../models"
 
 func addFile(rec *onnxface.Recognizer, path, id string) {
-	// AddImageToDataset returns onnxface.ErrNoFace/ErrMultipleFaces for
-	// images that don't have exactly one face -- check with errors.Is if
-	// you need to tell those apart; here we just log whatever comes back.
-	if err := rec.AddImageToDataset(path, id); err != nil {
+	err := rec.AddImageToDataset(path, id)
+	switch {
+	case errors.Is(err, onnxface.ErrNoFace), errors.Is(err, onnxface.ErrMultipleFaces):
+		fmt.Printf("%s: not exactly one face, skipping\n", path)
+	case err != nil:
 		fmt.Println(err)
 	}
 }
